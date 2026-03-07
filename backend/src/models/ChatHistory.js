@@ -21,6 +21,11 @@ module.exports = (sequelize) => {
             type: DataTypes.TEXT,
             allowNull: false,
         },
+        session_id: {
+            type: DataTypes.STRING(36),
+            allowNull: true,
+            comment: 'UUID grouping messages into a conversation session',
+        },
     }, {
         tableName: 'chat_histories',
         timestamps: true,

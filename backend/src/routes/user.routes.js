@@ -1,13 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const { checkJwt, extractUser } = require('../middleware/auth.middleware');
-const { syncUser, getMe, updateMe, lookupUser } = require('../controllers/user.controller');
+const userController = require('../controllers/user.controller');
 
 router.use(checkJwt, extractUser);
 
-router.post('/sync', syncUser);
-router.get('/me', getMe);
-router.put('/me', updateMe);
-router.get('/lookup/:username', lookupUser);
+router.post('/sync', userController.syncUser);
+router.get('/me', userController.getMe);
+router.put('/me', userController.updateMe);
+router.get('/search', userController.searchUsers);
+router.get('/lookup/:username', userController.lookupUser);
+router.put('/setup/complete', userController.completeSetup);
 
 module.exports = router;

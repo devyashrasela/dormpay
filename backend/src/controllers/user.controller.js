@@ -1,4 +1,5 @@
 const { User } = require('../models');
+const { Op } = require('sequelize');
 
 // POST /api/users/sync — Create or update user profile after Auth0 login
 const syncUser = async (req, res) => {
@@ -112,4 +113,43 @@ const lookupUser = async (req, res) => {
     }
 };
 
-module.exports = { syncUser, getMe, updateMe, lookupUser };
+// GET /api/users/search?q=query — Search users by username or display_name
+const searchUsers = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q || q.length < 2) return res.json({ users: [] });
+
+        const users = await User.findAll({
+            where: {
+                [Op.or]: [
+                    { username: { [Op.like]: `%${q}%` } },
+                    { display_name: { [Op.like]: `%${q}%` } },
+                ],
+                wallet_address: { [Op.ne]: null },
+            },
+            attributes: ['id', 'username', 'wallet_address', 'display_name', 'avatar_url'],
+            limit: 5,
+        });
+
+        res.json({ users });
+    } catch (error) {
+        console.error('searchUsers error:', error);
+        res.status(500).json({ error: 'Failed to search users' });
+    }
+};
+
+// PUT /api/users/setup/complete
+const completeSetup = async (req, res) => {
+    try {
+        const user = await User.findOne({ where: { auth0_sub: req.userSub } });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        await user.update({ setup_completed: true });
+        res.json({ message: 'Setup marked as complete', user });
+    } catch (error) {
+        console.error('completeSetup error:', error);
+        res.status(500).json({ error: 'Failed to complete setup' });
+    }
+};
+
+module.exports = { syncUser, getMe, updateMe, lookupUser, searchUsers, completeSetup };

@@ -8,7 +8,7 @@ const getSummary = async (req, res) => {
         if (!user) return res.status(404).json({ error: 'User not found' });
 
         const [sentStats] = await Transaction.findAll({
-            where: { sender_user_id: user.id, status: 'confirmed' },
+            where: { sender_user_id: user.id, status: { [Op.in]: ['confirmed', 'pending'] } },
             attributes: [
                 [fn('COUNT', col('id')), 'count'],
                 [fn('SUM', col('amount')), 'total'],
@@ -18,7 +18,7 @@ const getSummary = async (req, res) => {
         });
 
         const [receivedStats] = await Transaction.findAll({
-            where: { receiver_user_id: user.id, status: 'confirmed' },
+            where: { receiver_user_id: user.id, status: { [Op.in]: ['confirmed', 'pending'] } },
             attributes: [
                 [fn('COUNT', col('id')), 'count'],
                 [fn('SUM', col('amount')), 'total'],
@@ -59,7 +59,7 @@ const getMonthly = async (req, res) => {
         const sentMonthly = await Transaction.findAll({
             where: {
                 sender_user_id: user.id,
-                status: 'confirmed',
+                status: { [Op.in]: ['confirmed', 'pending'] },
                 created_at: { [Op.gte]: startDate },
             },
             attributes: [
@@ -75,7 +75,7 @@ const getMonthly = async (req, res) => {
         const receivedMonthly = await Transaction.findAll({
             where: {
                 receiver_user_id: user.id,
-                status: 'confirmed',
+                status: { [Op.in]: ['confirmed', 'pending'] },
                 created_at: { [Op.gte]: startDate },
             },
             attributes: [

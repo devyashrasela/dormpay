@@ -27,7 +27,7 @@ const saveTransaction = async (req, res) => {
             asset_type: asset_type || 'ALGO',
             asset_id: asset_id || 0,
             note: note || null,
-            status: 'pending',
+            status: 'confirmed',
         });
 
         // Create notification for recipient if they're a known user

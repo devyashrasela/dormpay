@@ -18,7 +18,7 @@ const buildUserContext = async (auth0Sub) => {
     const recentTxns = await Transaction.findAll({
         where: {
             [Op.or]: [{ sender_user_id: user.id }, { receiver_user_id: user.id }],
-            status: 'confirmed',
+            status: { [Op.in]: ['confirmed', 'pending'] },
         },
         include: [
             { model: User, as: 'sender', attributes: ['username'] },
@@ -35,13 +35,14 @@ const buildUserContext = async (auth0Sub) => {
             const otherUser = direction === 'SENT'
                 ? txn.receiver?.username || txn.receiver_address
                 : txn.sender?.username || txn.sender_address;
-            parts.push(`  ${direction} ${txn.amount} ${txn.asset_type} ${direction === 'SENT' ? 'to' : 'from'} @${otherUser} on ${txn.created_at.toISOString().split('T')[0]}${txn.note ? ` — "${txn.note}"` : ''}`);
+            const dateStr = txn.created_at ? new Date(txn.created_at).toISOString().split('T')[0] : 'unknown date';
+            parts.push(`  ${direction} ${txn.amount} ${txn.asset_type} ${direction === 'SENT' ? 'to' : 'from'} @${otherUser} on ${dateStr}${txn.note ? ` — "${txn.note}"` : ''}`);
         });
     }
 
     // Summary stats
     const [sentStats] = await Transaction.findAll({
-        where: { sender_user_id: user.id, status: 'confirmed' },
+        where: { sender_user_id: user.id, status: { [Op.in]: ['confirmed', 'pending'] } },
         attributes: [
             [fn('COUNT', col('id')), 'count'],
             [fn('SUM', col('amount')), 'total'],
@@ -50,7 +51,7 @@ const buildUserContext = async (auth0Sub) => {
     });
 
     const [recvStats] = await Transaction.findAll({
-        where: { receiver_user_id: user.id, status: 'confirmed' },
+        where: { receiver_user_id: user.id, status: { [Op.in]: ['confirmed', 'pending'] } },
         attributes: [
             [fn('COUNT', col('id')), 'count'],
             [fn('SUM', col('amount')), 'total'],
@@ -61,21 +62,25 @@ const buildUserContext = async (auth0Sub) => {
     parts.push(`\nSummary: Sent ${sentStats.total || 0} ALGO (${sentStats.count || 0} txns), Received ${recvStats.total || 0} ALGO (${recvStats.count || 0} txns)`);
 
     // Active split bills
-    const participantBills = await SplitBillParticipant.findAll({
-        where: { user_id: user.id },
-        include: [{
-            model: SplitBill,
-            where: { status: 'active' },
-            attributes: ['title', 'total_amount', 'asset_type'],
-        }],
-    });
-
-    if (participantBills.length > 0) {
-        parts.push(`\nActive Split Bills (${participantBills.length}):`);
-        participantBills.forEach((p) => {
-            const outstanding = parseFloat(p.share_amount) - parseFloat(p.paid_amount);
-            parts.push(`  "${p.SplitBill.title}" — Your share: ${p.share_amount}, Paid: ${p.paid_amount}, Outstanding: ${outstanding}`);
+    try {
+        const participantBills = await SplitBillParticipant.findAll({
+            where: { user_id: user.id },
+            include: [{
+                model: SplitBill,
+                where: { status: 'active' },
+                attributes: ['title', 'total_amount', 'asset_type'],
+            }],
         });
+
+        if (participantBills.length > 0) {
+            parts.push(`\nActive Split Bills (${participantBills.length}):`);
+            participantBills.forEach((p) => {
+                const outstanding = parseFloat(p.share_amount || 0) - parseFloat(p.paid_amount || 0);
+                parts.push(`  "${p.SplitBill.title}" — Your share: ${p.share_amount || 0}, Paid: ${p.paid_amount || 0}, Outstanding: ${outstanding}`);
+            });
+        }
+    } catch (e) {
+        // Split bills may not be set up yet, ignore
     }
 
     return parts.join('\n');

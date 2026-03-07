@@ -51,6 +51,12 @@ module.exports = (sequelize) => {
             type: DataTypes.DATE,
             allowNull: true,
         },
+        setup_completed: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: false,
+            comment: 'true when user has connected wallet and made first transaction',
+        },
     }, {
         tableName: 'users',
         timestamps: true,
