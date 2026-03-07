@@ -1,83 +1,69 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { PeraWalletConnect } from '@perawallet/connect';
 import useWalletStore from '../store/useWalletStore';
+import useAuthStore from '../store/useAuthStore';
 
 const peraWallet = new PeraWalletConnect();
 
-const usePeraWallet = () => {
-    const { address, isConnected, setAddress, disconnect: storeDisconnect } = useWalletStore();
-    const isReconnecting = useRef(false);
+export default function usePeraWallet() {
+    const { connectedAddress, setConnectedAddress, setPeraWallet, fetchBalance, fetchAssets } = useWalletStore();
+    const { updateProfile } = useAuthStore();
+    const reconnectAttempted = useRef(false);
+
+    useEffect(() => {
+        setPeraWallet(peraWallet);
+
+        if (!reconnectAttempted.current) {
+            reconnectAttempted.current = true;
+            peraWallet.reconnectSession()
+                .then((accounts) => {
+                    if (accounts.length) {
+                        setConnectedAddress(accounts[0]);
+                        peraWallet.connector?.on('disconnect', handleDisconnect);
+                    }
+                })
+                .catch(() => { /* not connected */ });
+        }
+    }, []);
+
+    // Refresh balance when address changes
+    useEffect(() => {
+        if (connectedAddress) {
+            fetchBalance(connectedAddress);
+            fetchAssets(connectedAddress);
+        }
+    }, [connectedAddress]);
+
+    const handleDisconnect = useCallback(() => {
+        setConnectedAddress(null);
+    }, []);
 
     const connect = useCallback(async () => {
         try {
             const accounts = await peraWallet.connect();
-            if (accounts && accounts.length > 0) {
-                setAddress(accounts[0]);
+            setConnectedAddress(accounts[0]);
+            peraWallet.connector?.on('disconnect', handleDisconnect);
 
-                peraWallet.connector?.on('disconnect', () => {
-                    storeDisconnect();
-                });
-            }
+            // Save wallet address to backend profile
+            try {
+                await updateProfile({ wallet_address: accounts[0] });
+            } catch (e) { /* non-critical */ }
+
             return accounts[0];
-        } catch (error) {
-            if (error?.data?.type !== 'CONNECT_MODAL_CLOSED') {
-                console.error('Pera Wallet connect error:', error);
-            }
-            return null;
-        }
-    }, [setAddress, storeDisconnect]);
-
-    const disconnect = useCallback(async () => {
-        try {
-            await peraWallet.disconnect();
-        } catch (error) {
-            console.error('Pera Wallet disconnect error:', error);
-        }
-        storeDisconnect();
-    }, [storeDisconnect]);
-
-    const signTransactions = useCallback(async (txGroups) => {
-        try {
-            const signedTxns = await peraWallet.signTransaction([txGroups]);
-            return signedTxns;
-        } catch (error) {
-            console.error('Transaction signing error:', error);
-            throw error;
+        } catch (err) {
+            console.error('Pera connect error:', err);
+            throw err;
         }
     }, []);
 
-    // Auto-reconnect on page load
-    useEffect(() => {
-        if (isReconnecting.current) return;
-        isReconnecting.current = true;
+    const disconnect = useCallback(() => {
+        peraWallet.disconnect();
+        setConnectedAddress(null);
+    }, []);
 
-        peraWallet
-            .reconnectSession()
-            .then((accounts) => {
-                if (accounts && accounts.length > 0) {
-                    setAddress(accounts[0]);
+    const signTransactions = useCallback(async (txnGroups) => {
+        return await peraWallet.signTransaction(txnGroups);
+    }, []);
 
-                    peraWallet.connector?.on('disconnect', () => {
-                        storeDisconnect();
-                    });
-                }
-            })
-            .catch(() => {
-                // No previous session
-            })
-            .finally(() => {
-                isReconnecting.current = false;
-            });
-    }, [setAddress, storeDisconnect]);
-
-    return {
-        address,
-        isConnected,
-        connect,
-        disconnect,
-        signTransactions,
-        peraWallet,
-    };
-};
-
-export default usePeraWallet;
+    return { connect, disconnect, connectedAddress, signTransactions, peraWallet };
+}

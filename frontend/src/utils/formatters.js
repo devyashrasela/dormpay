@@ -1,43 +1,68 @@
 /**
- * Format ALGO amount with proper decimals
+ * Format ALGO amount with fixed precision
  */
-export const formatAlgo = (amount, decimals = 4) => {
-    if (amount === null || amount === undefined) return '0';
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return num.toLocaleString('en-US', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: decimals,
+export function formatAlgo(amount) {
+    if (amount == null) return '0.00';
+    return parseFloat(amount).toFixed(2);
+}
+
+/**
+ * ALGO to INR conversion (approximate)
+ */
+const INR_RATE = 148.9;
+
+export function algoToINR(algo) {
+    return (parseFloat(algo || 0) * INR_RATE).toLocaleString('en-IN', {
+        maximumFractionDigits: 2,
     });
-};
+}
 
 /**
- * Truncate Algorand address for display
+ * Relative time (e.g., "2h ago", "yesterday")
  */
-export const truncateAddress = (address, startLen = 6, endLen = 4) => {
-    if (!address) return '';
-    if (address.length <= startLen + endLen) return address;
-    return `${address.slice(0, startLen)}...${address.slice(-endLen)}`;
-};
-
-/**
- * Format relative time
- */
-export const timeAgo = (dateStr) => {
-    const date = new Date(dateStr);
+export function timeAgo(dateStr) {
     const now = new Date();
-    const seconds = Math.floor((now - date) / 1000);
+    const date = new Date(dateStr);
+    const diffMs = now - date;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
 
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay === 1) return 'yesterday';
+    if (diffDay < 7) {
+        return date.toLocaleDateString('en-US', { weekday: 'short' });
+    }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
+}
 
 /**
- * Format currency amount
+ * Format date for table display
  */
-export const formatCurrency = (amount, assetType = 'ALGO') => {
-    return `${formatAlgo(amount)} ${assetType}`;
-};
+export function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
+}
+
+/**
+ * Shorten a transaction ID
+ */
+export function shortenTxId(txId) {
+    if (!txId) return '';
+    return `TXID...${txId.slice(-4)}`;
+}
+
+/**
+ * Get initials from a name or username
+ */
+export function getInitials(name) {
+    if (!name) return '??';
+    const parts = name.split(/[\s_.-]+/);
+    if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+}
