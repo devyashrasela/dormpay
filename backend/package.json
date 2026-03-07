@@ -1,0 +1,41 @@
+{
+  "name": "campus-wallet-backend",
+  "version": "1.0.0",
+  "description": "Campus Wallet - Student Payment System Backend",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:migrate": "npx sequelize-cli db:migrate",
+    "db:migrate:undo": "npx sequelize-cli db:migrate:undo:all",
+    "db:seed": "npx sequelize-cli db:seed:all",
+    "test": "jest --coverage"
+  },
+  "keywords": [
+    "algorand",
+    "campus-wallet",
+    "blockchain"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "algosdk": "^3.5.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "elevenlabs": "^1.59.0",
+    "express": "^5.2.1",
+    "express-oauth2-jwt-bearer": "^1.7.4",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
+    "multer": "^2.1.1",
+    "mysql2": "^3.19.0",
+    "nodemailer": "^8.0.1",
+    "sequelize": "^6.37.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "sequelize-cli": "^6.6.5"
+  }
+}
