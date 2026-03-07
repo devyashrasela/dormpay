@@ -7,6 +7,7 @@ const {
     getSplitBillDetail,
     addMembers,
     addExpense,
+    getBalances,
     settleUserShare,
 } = require('../controllers/splitBill.controller');
 
@@ -17,6 +18,7 @@ router.get('/', listSplitBills);
 router.get('/:id', getSplitBillDetail);
 router.post('/:id/members', addMembers);
 router.post('/:id/expenses', addExpense);
+router.get('/:id/balances', getBalances);
 router.post('/:id/settle', settleUserShare);
 
 module.exports = router;

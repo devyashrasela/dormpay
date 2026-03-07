@@ -83,8 +83,8 @@ const startServer = async () => {
         console.log('✅ Database connection established');
 
         // Sync models (creates tables if not exist)
-        // await db.sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
-        // console.log('✅ Database synced');
+        await db.sequelize.sync({ alter: true });
+        console.log('✅ Database synced');
 
         app.listen(PORT, () => {
             console.log(`🚀 Campus Wallet API running on http://localhost:${PORT}`);

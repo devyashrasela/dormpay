@@ -10,16 +10,16 @@ const createSplitBill = async (req, res) => {
 
         const { title, description, total_amount, asset_type, participants } = req.body;
 
-        if (!title || !total_amount) {
-            return res.status(400).json({ error: 'title and total_amount are required' });
+        if (!title) {
+            return res.status(400).json({ error: 'title is required' });
         }
 
-        // Create the split bill
+        // Create the split bill (total_amount starts at 0, grows with expenses)
         const bill = await SplitBill.create({
             creator_id: user.id,
             title,
             description: description || null,
-            total_amount,
+            total_amount: total_amount || 0,
             asset_type: asset_type || 'ALGO',
             status: 'active',
         });
@@ -43,24 +43,16 @@ const createSplitBill = async (req, res) => {
                         split_bill_id: bill.id,
                         user_id: pUser.id,
                         is_admin: false,
-                        share_amount: p.share_amount || 0,
+                        share_amount: 0,
                         paid_amount: 0,
                         status: 'pending',
                     });
-                }
-            }
-        }
 
-        // Notify participants about the split invite
-        if (participants && Array.isArray(participants)) {
-            for (const p of participants) {
-                const pUser = await User.findOne({ where: { username: p.username } });
-                if (pUser && pUser.id !== user.id) {
                     await createNotification({
                         userId: pUser.id,
                         type: 'split_invite',
                         title: 'Split Bill Invite',
-                        message: `@${user.username} added you to "${title}" — Your share: ${p.share_amount || 0} ${asset_type || 'ALGO'}`,
+                        message: `@${user.username} added you to "${title}"`,
                         referenceId: String(bill.id),
                     });
                 }
@@ -81,7 +73,6 @@ const listSplitBills = async (req, res) => {
         const user = await User.findOne({ where: { auth0_sub: req.userSub } });
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        // Find bills where user is creator or participant
         const participantBillIds = await SplitBillParticipant.findAll({
             where: { user_id: user.id },
             attributes: ['split_bill_id'],
@@ -131,7 +122,6 @@ const addMembers = async (req, res) => {
         if (!bill) return res.status(404).json({ error: 'Split bill not found' });
         if (bill.status !== 'active') return res.status(400).json({ error: 'Bill is not active' });
 
-        // Check if user is admin
         const participant = await SplitBillParticipant.findOne({
             where: { split_bill_id: bill.id, user_id: user.id, is_admin: true },
         });
@@ -156,25 +146,19 @@ const addMembers = async (req, res) => {
                 split_bill_id: bill.id,
                 user_id: mUser.id,
                 is_admin: m.is_admin || false,
-                share_amount: m.share_amount || 0,
+                share_amount: 0,
                 paid_amount: 0,
                 status: 'pending',
             });
             added.push(mUser.username);
-        }
 
-        // Notify newly added members
-        for (const username of added) {
-            const addedUser = await User.findOne({ where: { username } });
-            if (addedUser) {
-                await createNotification({
-                    userId: addedUser.id,
-                    type: 'split_invite',
-                    title: 'Split Bill Invite',
-                    message: `@${user.username} added you to "${bill.title}"`,
-                    referenceId: String(bill.id),
-                });
-            }
+            await createNotification({
+                userId: mUser.id,
+                type: 'split_invite',
+                title: 'Split Bill Invite',
+                message: `@${user.username} added you to "${bill.title}"`,
+                referenceId: String(bill.id),
+            });
         }
 
         const fullBill = await getSplitBillWithDetails(bill.id);
@@ -185,7 +169,7 @@ const addMembers = async (req, res) => {
     }
 };
 
-// POST /api/split-bills/:id/expenses — Record an expense
+// POST /api/split-bills/:id/expenses — Record an expense (Google-style)
 const addExpense = async (req, res) => {
     try {
         const user = await User.findOne({ where: { auth0_sub: req.userSub } });
@@ -195,22 +179,27 @@ const addExpense = async (req, res) => {
         if (!bill) return res.status(404).json({ error: 'Split bill not found' });
         if (bill.status !== 'active') return res.status(400).json({ error: 'Bill is not active' });
 
-        // Check if user is a participant
         const participant = await SplitBillParticipant.findOne({
             where: { split_bill_id: bill.id, user_id: user.id },
         });
         if (!participant) return res.status(403).json({ error: 'You are not a participant' });
 
-        const { description, amount, txn_id, paid_by_username } = req.body;
+        const { description, amount, paid_by_user_id, split_among } = req.body;
         if (!description || !amount) {
             return res.status(400).json({ error: 'description and amount are required' });
         }
 
-        // Determine who paid — default to current user
-        let paidByUserId = user.id;
-        if (paid_by_username) {
-            const paidByUser = await User.findOne({ where: { username: paid_by_username } });
-            if (paidByUser) paidByUserId = paidByUser.id;
+        // Who paid — default to current user
+        const paidByUserId = paid_by_user_id || user.id;
+
+        // Who splits — default to all participants
+        let splitUserIds = split_among;
+        if (!splitUserIds || !Array.isArray(splitUserIds) || splitUserIds.length === 0) {
+            const allParts = await SplitBillParticipant.findAll({
+                where: { split_bill_id: bill.id },
+                attributes: ['user_id'],
+            });
+            splitUserIds = allParts.map((p) => p.user_id);
         }
 
         const expense = await SplitBillExpense.create({
@@ -218,23 +207,17 @@ const addExpense = async (req, res) => {
             paid_by_user_id: paidByUserId,
             description,
             amount,
-            txn_id: txn_id || null,
+            split_among: splitUserIds,
+            txn_id: null,
         });
 
-        // Update participant's paid_amount
-        const paidParticipant = await SplitBillParticipant.findOne({
-            where: { split_bill_id: bill.id, user_id: paidByUserId },
-        });
-        if (paidParticipant) {
-            const newPaidAmount = parseFloat(paidParticipant.paid_amount) + parseFloat(amount);
-            let status = 'pending';
-            if (newPaidAmount >= parseFloat(paidParticipant.share_amount)) {
-                status = 'paid';
-            } else if (newPaidAmount > 0) {
-                status = 'partial';
-            }
-            await paidParticipant.update({ paid_amount: newPaidAmount, status });
-        }
+        // Recalculate all participant shares from scratch
+        await recalculateShares(bill.id);
+
+        // Update bill total
+        const allExpenses = await SplitBillExpense.findAll({ where: { split_bill_id: bill.id } });
+        const total = allExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+        await bill.update({ total_amount: total });
 
         const fullBill = await getSplitBillWithDetails(bill.id);
         res.status(201).json({ message: 'Expense recorded', expense, bill: fullBill });
@@ -244,7 +227,104 @@ const addExpense = async (req, res) => {
     }
 };
 
-// POST /api/split-bills/:id/settle — Settle user's outstanding shares
+// GET /api/split-bills/:id/balances — Calculate who owes whom
+const getBalances = async (req, res) => {
+    try {
+        const bill = await SplitBill.findByPk(req.params.id, {
+            include: [
+                {
+                    model: SplitBillParticipant,
+                    as: 'participants',
+                    include: [{ model: User, attributes: ['id', 'username', 'display_name'] }],
+                },
+                { model: SplitBillExpense, as: 'expenses' },
+            ],
+        });
+
+        if (!bill) return res.status(404).json({ error: 'Split bill not found' });
+
+        const participants = bill.participants;
+        const expenses = bill.expenses;
+
+        // Calculate net balance for each participant
+        // net > 0 means others owe them, net < 0 means they owe others
+        const netBalances = {};
+        participants.forEach((p) => { netBalances[p.user_id] = 0; });
+
+        for (const expense of expenses) {
+            const paidBy = expense.paid_by_user_id;
+            const splitIds = expense.split_among || participants.map((p) => p.user_id);
+            const sharePerPerson = parseFloat(expense.amount) / splitIds.length;
+
+            // Person who paid gets credit
+            netBalances[paidBy] = (netBalances[paidBy] || 0) + parseFloat(expense.amount);
+
+            // Each person in split_among gets debited
+            for (const uid of splitIds) {
+                netBalances[uid] = (netBalances[uid] || 0) - sharePerPerson;
+            }
+        }
+
+        // Generate simplified debts (who owes whom)
+        const debtors = []; // people who owe (net < 0)
+        const creditors = []; // people who are owed (net > 0)
+
+        for (const [userId, net] of Object.entries(netBalances)) {
+            const roundedNet = Math.round(net * 1000000) / 1000000; // avoid floating point issues
+            if (roundedNet < -0.0001) {
+                debtors.push({ userId: parseInt(userId), amount: Math.abs(roundedNet) });
+            } else if (roundedNet > 0.0001) {
+                creditors.push({ userId: parseInt(userId), amount: roundedNet });
+            }
+        }
+
+        // Match debtors to creditors to minimize transactions
+        const settlements = [];
+        let di = 0, ci = 0;
+        const dCopy = debtors.map((d) => ({ ...d }));
+        const cCopy = creditors.map((c) => ({ ...c }));
+
+        while (di < dCopy.length && ci < cCopy.length) {
+            const settleAmount = Math.min(dCopy[di].amount, cCopy[ci].amount);
+            if (settleAmount > 0.0001) {
+                const debtorInfo = participants.find((p) => p.user_id === dCopy[di].userId);
+                const creditorInfo = participants.find((p) => p.user_id === cCopy[ci].userId);
+
+                settlements.push({
+                    from_user_id: dCopy[di].userId,
+                    from_username: debtorInfo?.User?.username,
+                    from_display_name: debtorInfo?.User?.display_name,
+                    to_user_id: cCopy[ci].userId,
+                    to_username: creditorInfo?.User?.username,
+                    to_display_name: creditorInfo?.User?.display_name,
+                    amount: Math.round(settleAmount * 1000000) / 1000000,
+                });
+            }
+
+            dCopy[di].amount -= settleAmount;
+            cCopy[ci].amount -= settleAmount;
+            if (dCopy[di].amount < 0.0001) di++;
+            if (cCopy[ci].amount < 0.0001) ci++;
+        }
+
+        // Per-participant summary
+        const summary = participants.map((p) => ({
+            user_id: p.user_id,
+            username: p.User?.username,
+            display_name: p.User?.display_name,
+            net_balance: Math.round((netBalances[p.user_id] || 0) * 1000000) / 1000000,
+            share_amount: parseFloat(p.share_amount),
+            paid_amount: parseFloat(p.paid_amount),
+        }));
+
+        res.json({ balances: summary, settlements });
+    } catch (error) {
+        console.error('getBalances error:', error);
+        res.status(500).json({ error: 'Failed to calculate balances' });
+    }
+};
+
+// POST /api/split-bills/:id/settle — Settle a specific debt
 const settleUserShare = async (req, res) => {
     try {
         const user = await User.findOne({ where: { auth0_sub: req.userSub } });
@@ -259,43 +339,40 @@ const settleUserShare = async (req, res) => {
         });
         if (!participant) return res.status(403).json({ error: 'You are not a participant' });
 
-        const { txn_ids } = req.body; // Array of Algorand txn IDs from batch payment
-        const outstanding = parseFloat(participant.share_amount) - parseFloat(participant.paid_amount);
+        const { txn_id, to_user_id, amount } = req.body;
 
-        if (outstanding <= 0) {
-            return res.status(400).json({ error: 'No outstanding balance to settle' });
-        }
-
-        // Mark participant as paid
-        await participant.update({
-            paid_amount: participant.share_amount,
-            status: 'paid',
+        // Record settlement as an expense (payer = current user, type = settlement)
+        await SplitBillExpense.create({
+            split_bill_id: bill.id,
+            paid_by_user_id: user.id,
+            description: `Settlement payment`,
+            amount: amount || 0,
+            split_among: to_user_id ? [to_user_id] : [user.id],
+            txn_id: txn_id || null,
         });
 
-        // Record as expense(s)
-        if (txn_ids && Array.isArray(txn_ids)) {
-            for (const txnId of txn_ids) {
-                await SplitBillExpense.create({
-                    split_bill_id: bill.id,
-                    paid_by_user_id: user.id,
-                    description: `Settlement payment`,
-                    amount: outstanding / txn_ids.length,
-                    txn_id: txnId,
-                });
+        // Recalculate shares
+        await recalculateShares(bill.id);
+
+        // Check if all debts are settled (all net balances near 0)
+        const allExpenses = await SplitBillExpense.findAll({ where: { split_bill_id: bill.id } });
+        const allParts = await SplitBillParticipant.findAll({ where: { split_bill_id: bill.id } });
+        const netBalances = {};
+        allParts.forEach((p) => { netBalances[p.user_id] = 0; });
+
+        for (const exp of allExpenses) {
+            const splitIds = exp.split_among || allParts.map((p) => p.user_id);
+            const sharePerPerson = parseFloat(exp.amount) / splitIds.length;
+            netBalances[exp.paid_by_user_id] = (netBalances[exp.paid_by_user_id] || 0) + parseFloat(exp.amount);
+            for (const uid of splitIds) {
+                netBalances[uid] = (netBalances[uid] || 0) - sharePerPerson;
             }
         }
 
-        // Check if all participants are settled
-        const allParticipants = await SplitBillParticipant.findAll({
-            where: { split_bill_id: bill.id },
-        });
-        const allSettled = allParticipants.every((p) => p.status === 'paid' || parseFloat(p.share_amount) === 0);
-
+        const allSettled = Object.values(netBalances).every((v) => Math.abs(v) < 0.01);
         if (allSettled) {
             await bill.update({ status: 'settled' });
-
-            // Notify all participants that the bill is settled
-            for (const p of allParticipants) {
+            for (const p of allParts) {
                 if (p.user_id !== user.id) {
                     await createNotification({
                         userId: p.user_id,
@@ -310,8 +387,8 @@ const settleUserShare = async (req, res) => {
 
         const fullBill = await getSplitBillWithDetails(bill.id);
         res.json({
-            message: 'Share settled',
-            settled_amount: outstanding,
+            message: 'Settlement recorded',
+            settled_amount: amount || 0,
             bill_status: allSettled ? 'settled' : 'active',
             bill: fullBill,
         });
@@ -320,6 +397,41 @@ const settleUserShare = async (req, res) => {
         res.status(500).json({ error: 'Failed to settle share' });
     }
 };
+
+// Helper: Recalculate all participant shares from expenses
+async function recalculateShares(billId) {
+    const participants = await SplitBillParticipant.findAll({ where: { split_bill_id: billId } });
+    const expenses = await SplitBillExpense.findAll({ where: { split_bill_id: billId } });
+
+    // Reset shares
+    const shares = {};
+    const paid = {};
+    participants.forEach((p) => { shares[p.user_id] = 0; paid[p.user_id] = 0; });
+
+    for (const expense of expenses) {
+        const splitIds = expense.split_among || participants.map((p) => p.user_id);
+        const sharePerPerson = parseFloat(expense.amount) / splitIds.length;
+
+        // Each person in split_among owes their share
+        for (const uid of splitIds) {
+            shares[uid] = (shares[uid] || 0) + sharePerPerson;
+        }
+
+        // Person who paid has that as paid_amount
+        paid[expense.paid_by_user_id] = (paid[expense.paid_by_user_id] || 0) + parseFloat(expense.amount);
+    }
+
+    // Update participants
+    for (const p of participants) {
+        const shareAmount = shares[p.user_id] || 0;
+        const paidAmount = paid[p.user_id] || 0;
+        let status = 'pending';
+        if (paidAmount >= shareAmount && shareAmount > 0) status = 'paid';
+        else if (paidAmount > 0) status = 'partial';
+
+        await p.update({ share_amount: shareAmount, paid_amount: paidAmount, status });
+    }
+}
 
 // Helper: Get split bill with all details
 async function getSplitBillWithDetails(billId) {
@@ -347,5 +459,6 @@ module.exports = {
     getSplitBillDetail,
     addMembers,
     addExpense,
+    getBalances,
     settleUserShare,
 };

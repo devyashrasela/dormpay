@@ -68,9 +68,5 @@ module.exports = (sequelize) => {
         User.hasOne(models.VoiceProfile, { foreignKey: 'user_id' });
     };
 
-
-
-
-
     return User;
 };

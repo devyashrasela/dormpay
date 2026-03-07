@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { PeraWalletConnect } from '@perawallet/connect';
 import useWalletStore from '../store/useWalletStore';
 import useAuthStore from '../store/useAuthStore';
+import api from '../api/axios';
 
 const peraWallet = new PeraWalletConnect();
 
@@ -38,18 +39,37 @@ export default function usePeraWallet() {
         setConnectedAddress(null);
     }, []);
 
+    // Fund wallet from TestNet via backend funder account
+    const fundFromFaucet = useCallback(async (address) => {
+        try {
+            const res = await api.post('/api/wallet/fund-testnet', { address });
+            return res.data;
+        } catch (err) {
+            console.error('Faucet funding error:', err);
+            return null;
+        }
+    }, []);
+
     const connect = useCallback(async () => {
         try {
             const accounts = await peraWallet.connect();
-            setConnectedAddress(accounts[0]);
+            const address = accounts[0];
+            setConnectedAddress(address);
             peraWallet.connector?.on('disconnect', handleDisconnect);
 
             // Save wallet address to backend profile
             try {
-                await updateProfile({ wallet_address: accounts[0] });
+                await updateProfile({ wallet_address: address });
             } catch (e) { /* non-critical */ }
 
-            return accounts[0];
+            // Auto-fund from TestNet funder account
+            try {
+                await fundFromFaucet(address);
+                // Refresh balance after funding (with small delay for network propagation)
+                setTimeout(() => fetchBalance(address), 3000);
+            } catch (e) { /* non-critical */ }
+
+            return address;
         } catch (err) {
             console.error('Pera connect error:', err);
             throw err;
@@ -65,5 +85,5 @@ export default function usePeraWallet() {
         return await peraWallet.signTransaction(txnGroups);
     }, []);
 
-    return { connect, disconnect, connectedAddress, signTransactions, peraWallet };
+    return { connect, disconnect, connectedAddress, signTransactions, peraWallet, fundFromFaucet };
 }

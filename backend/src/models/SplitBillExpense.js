@@ -28,6 +28,11 @@ module.exports = (sequelize) => {
             type: DataTypes.DECIMAL(20, 6),
             allowNull: false,
         },
+        split_among: {
+            type: DataTypes.JSON,
+            allowNull: true,
+            comment: 'Array of user_ids who share this expense. null = all participants.',
+        },
         txn_id: {
             type: DataTypes.STRING(64),
             allowNull: true,

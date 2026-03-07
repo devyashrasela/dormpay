@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import usePeraWallet from '../hooks/usePeraWallet';
 import useWalletStore from '../store/useWalletStore';
@@ -19,26 +19,32 @@ export default function Send() {
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [resolvedAddress, setResolvedAddress] = useState(null);
+    const debounceRef = useRef(null);
 
-    // Resolve @username to wallet address
-    const resolveRecipient = async (value) => {
+    // Resolve @username to wallet address (debounced)
+    const resolveRecipient = useCallback((value) => {
         setRecipient(value);
         setResolvedAddress(null);
+
+        // Clear any pending debounce
+        if (debounceRef.current) clearTimeout(debounceRef.current);
 
         if (value.startsWith('@')) {
             const username = value.slice(1);
             if (username.length >= 3) {
-                try {
-                    const res = await api.get(`/api/users/lookup/${username}`);
-                    if (res.data.user?.wallet_address) {
-                        setResolvedAddress(res.data.user.wallet_address);
-                    }
-                } catch { /* not found */ }
+                debounceRef.current = setTimeout(async () => {
+                    try {
+                        const res = await api.get(`/api/users/lookup/${username}`);
+                        if (res.data.user?.wallet_address) {
+                            setResolvedAddress(res.data.user.wallet_address);
+                        }
+                    } catch { /* not found */ }
+                }, 400);
             }
         } else if (isValidAddress(value)) {
             setResolvedAddress(value);
         }
-    };
+    }, []);
 
     const executeSend = async () => {
         const toAddress = resolvedAddress;
@@ -58,8 +64,8 @@ export default function Send() {
                 note,
             });
 
-            // Sign with Pera Wallet
-            const signedTxn = await signTransactions([{ txn, signers: [connectedAddress] }]);
+            // Sign with Pera Wallet — pass raw txn in 2D array [[{txn}]]
+            const signedTxn = await signTransactions([[{ txn, signers: [connectedAddress] }]]);
 
             // Submit to Algorand
             const txId = await submitTransaction(signedTxn[0]);

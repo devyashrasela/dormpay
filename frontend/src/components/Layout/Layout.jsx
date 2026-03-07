@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import useAuthStore from '../../store/useAuthStore';
+import useWalletStore from '../../store/useWalletStore';
+import api from '../../api/axios';
 import { getInitials } from '../../utils/formatters';
 
 const navItems = [
@@ -75,31 +78,83 @@ export default function Layout({ children }) {
     );
 }
 
-// Right rail with activity feed
+// Right rail with dynamic quick actions
 function RightRail() {
+    const { connectedAddress } = useWalletStore();
+    const [hasTxns, setHasTxns] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+
+    useEffect(() => {
+        checkTransactions();
+        fetchNotifications();
+    }, []);
+
+    const checkTransactions = async () => {
+        try {
+            const res = await api.get('/api/transactions/history?limit=1');
+            setHasTxns((res.data.transactions || []).length > 0);
+        } catch { /* ignore */ }
+    };
+
+    const fetchNotifications = async () => {
+        try {
+            const res = await api.get('/api/notifications?limit=5');
+            setNotifications(res.data.notifications || []);
+        } catch { /* ignore */ }
+    };
+
+    const walletConnected = !!connectedAddress;
+    const firstPaymentDone = hasTxns;
+    const allDone = walletConnected && firstPaymentDone;
+
     return (
         <div className="right-rail">
+            {/* Notifications */}
             <div className="section-label">
-                <span className="pulse-dot"></span>Dorm Activity
+                <span className="pulse-dot"></span>Notifications
             </div>
 
-            <div className="feed-item">
-                <div className="feed-text">
-                    <span className="name">Activity feed</span> will show real-time transactions from your dorm community.
+            {notifications.length > 0 ? (
+                notifications.map((n) => (
+                    <div key={n.id} className="feed-item">
+                        <div className="feed-text">{n.message}</div>
+                        <div className="feed-meta">{n.title}</div>
+                    </div>
+                ))
+            ) : (
+                <div className="feed-item">
+                    <div className="feed-text" style={{ color: 'var(--color-muted)', fontStyle: 'italic', fontFamily: 'var(--font-serif)' }}>
+                        No notifications yet
+                    </div>
                 </div>
-                <div className="feed-meta">Connect wallet to begin</div>
-            </div>
+            )}
 
+            {/* Quick Actions */}
             <div className="pending-card">
-                <div className="pending-label">Quick Actions</div>
-                <div className="pending-item">
-                    <span>Connect Pera Wallet</span>
-                    <span className="pending-amt">→</span>
+                <div className="pending-label">
+                    {allDone ? 'All Set!' : 'Quick Actions'}
                 </div>
-                <div className="pending-item">
-                    <span>Send your first payment</span>
-                    <span className="pending-amt">→</span>
-                </div>
+
+                {allDone ? (
+                    <div style={{ fontSize: 12, color: 'var(--color-cream)', opacity: 0.8 }}>
+                        You're all set! 🎉 Start splitting bills and sending payments.
+                    </div>
+                ) : (
+                    <>
+                        {!walletConnected && (
+                            <div className="pending-item">
+                                <span>Connect Pera Wallet</span>
+                                <NavLink to="/settings" style={{ color: 'var(--color-lime)', fontSize: 12, textDecoration: 'none' }}>→</NavLink>
+                            </div>
+                        )}
+                        {!firstPaymentDone && (
+                            <div className="pending-item">
+                                <span>Send your first payment</span>
+                                <NavLink to="/send" style={{ color: 'var(--color-lime)', fontSize: 12, textDecoration: 'none' }}>→</NavLink>
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
         </div>
     );
