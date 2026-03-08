@@ -21,8 +21,10 @@ export function algoToINR(algo) {
  * Relative time (e.g., "2h ago", "yesterday")
  */
 export function timeAgo(dateStr) {
+    if (!dateStr) return '';
     const now = new Date();
     const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '';
     const diffMs = now - date;
     const diffSec = Math.floor(diffMs / 1000);
     const diffMin = Math.floor(diffSec / 60);
@@ -43,7 +45,9 @@ export function timeAgo(dateStr) {
  * Format date for table display
  */
 export function formatDate(dateStr) {
+    if (!dateStr) return '—';
     const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '—';
     return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
 }
 

@@ -1,39 +1,72 @@
 import { useEffect, useState, useRef } from 'react';
 import api from '../api/axios';
+import ReactMarkdown from 'react-markdown';
 
 export default function AIChat() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [sessionId, setSessionId] = useState(null);
+    const [newMsgIds, setNewMsgIds] = useState(new Set());
     const messagesEndRef = useRef(null);
-
-    useEffect(() => {
-        fetchHistory();
-    }, []);
+    const inputRef = useRef(null);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const fetchHistory = async () => {
+    // Generate a fresh session on mount (new chat every time)
+    useEffect(() => {
+        inputRef.current?.focus();
+        startNewSession();
+    }, []);
+
+    // Listen for loadSession events from sidebar
+    useEffect(() => {
+        const handler = (e) => {
+            loadSession(e.detail);
+        };
+        window.addEventListener('loadChatSession', handler);
+        return () => window.removeEventListener('loadChatSession', handler);
+    }, []);
+
+    const startNewSession = () => {
+        const newId = crypto.randomUUID();
+        setSessionId(newId);
+        setMessages([]);
+        setNewMsgIds(new Set());
+        inputRef.current?.focus();
+    };
+
+    const loadSession = async (sid) => {
         try {
-            const res = await api.get('/api/chat/history?limit=50');
+            setSessionId(sid);
+            setNewMsgIds(new Set());
+            const res = await api.get(`/api/chat/history?session_id=${sid}`);
             setMessages(res.data.history || []);
         } catch (err) {
-            console.error('Failed to fetch chat history:', err);
+            console.error('Failed to load session:', err);
         }
     };
 
-    const sendMessage = async () => {
-        if (!input.trim() || loading) return;
-        const userMsg = input.trim();
-        setInput('');
-        setMessages((prev) => [...prev, { role: 'user', message: userMsg, id: Date.now() }]);
+    const sendMessage = async (overrideMsg) => {
+        const msgToSend = overrideMsg || input.trim();
+        if (!msgToSend || loading) return;
+        if (!overrideMsg) setInput('');
+        setMessages((prev) => [...prev, { role: 'user', message: msgToSend, id: Date.now() }]);
 
         setLoading(true);
         try {
-            const res = await api.post('/api/chat', { message: userMsg });
-            setMessages((prev) => [...prev, { role: 'assistant', message: res.data.response, id: Date.now() + 1 }]);
+            const res = await api.post('/api/chat', { message: msgToSend, session_id: sessionId });
+            // If this is the first message, we might get a new session_id back
+            if (res.data.session_id && res.data.session_id !== sessionId) {
+                setSessionId(res.data.session_id);
+            }
+            const newId = Date.now() + 1;
+            setNewMsgIds((prev) => new Set(prev).add(newId));
+            setMessages((prev) => [...prev, { role: 'assistant', message: res.data.response, id: newId }]);
+            // Trigger sidebar refresh
+            window.dispatchEvent(new Event('chatSessionUpdated'));
         } catch (err) {
             setMessages((prev) => [...prev, { role: 'assistant', message: 'Sorry, I couldn\'t process that. Please try again.', id: Date.now() + 1 }]);
         } finally {
@@ -44,7 +77,8 @@ export default function AIChat() {
     const clearHistory = async () => {
         try {
             await api.delete('/api/chat/history');
-            setMessages([]);
+            startNewSession();
+            window.dispatchEvent(new Event('chatSessionUpdated'));
         } catch (err) {
             console.error('Failed to clear history:', err);
         }
@@ -61,14 +95,17 @@ export default function AIChat() {
         <div className="chat-container">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div className="section-label" style={{ margin: 0 }}>— AI Assistant</div>
-                {messages.length > 0 && (
-                    <button className="link-btn" onClick={clearHistory}>Clear History</button>
-                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="link-btn" onClick={() => { startNewSession(); window.dispatchEvent(new Event('chatSessionUpdated')); }}>New Chat</button>
+                    {messages.length > 0 && (
+                        <button className="link-btn" onClick={clearHistory}>Clear All</button>
+                    )}
+                </div>
             </div>
 
             {/* Messages */}
             <div className="chat-messages">
-                {messages.length === 0 && (
+                {messages.length === 0 && !loading && (
                     <div style={{ padding: '40px 0', textAlign: 'center' }}>
                         <div style={{ fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 300, marginBottom: 8, color: 'var(--color-petrol)' }}>
                             DormPay AI
@@ -90,7 +127,7 @@ export default function AIChat() {
                                         color: 'var(--color-petrol)',
                                         transition: 'background 0.12s',
                                     }}
-                                    onClick={() => { setInput(q); }}
+                                    onClick={() => sendMessage(q)}
                                     onMouseEnter={(e) => e.target.style.background = 'var(--color-lime)'}
                                     onMouseLeave={(e) => e.target.style.background = 'white'}
                                 >
@@ -106,7 +143,17 @@ export default function AIChat() {
                         key={msg.id}
                         className={`chat-bubble ${msg.role}`}
                     >
-                        {msg.message}
+                        {msg.role === 'assistant' ? (
+                            <div className="markdown-body">
+                                {newMsgIds.has(msg.id) ? (
+                                    <TypewriterMarkdown text={msg.message} scrollRef={messagesEndRef} />
+                                ) : (
+                                    <ReactMarkdown>{msg.message}</ReactMarkdown>
+                                )}
+                            </div>
+                        ) : (
+                            msg.message
+                        )}
                     </div>
                 ))}
 
@@ -123,6 +170,7 @@ export default function AIChat() {
             {/* Input */}
             <div className="chat-input-bar">
                 <input
+                    ref={inputRef}
                     className="chat-input"
                     placeholder="Ask about your transactions..."
                     value={input}
@@ -130,10 +178,30 @@ export default function AIChat() {
                     onKeyDown={handleKeyDown}
                     disabled={loading}
                 />
-                <button className="chat-send-btn" onClick={sendMessage} disabled={loading || !input.trim()}>
+                <button className="chat-send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 8h12M10 4l4 4-4 4" /></svg>
                 </button>
             </div>
         </div>
     );
+}
+
+function TypewriterMarkdown({ text, speed = 10, scrollRef }) {
+    const [displayedText, setDisplayedText] = useState('');
+    const [idx, setIdx] = useState(0);
+
+    useEffect(() => {
+        if (idx < text.length) {
+            const timer = setTimeout(() => {
+                setDisplayedText((prev) => prev + text.charAt(idx));
+                setIdx(idx + 1);
+                if (scrollRef?.current) {
+                    scrollRef.current.scrollIntoView({ behavior: 'auto' });
+                }
+            }, speed);
+            return () => clearTimeout(timer);
+        }
+    }, [idx, text, speed, scrollRef]);
+
+    return <ReactMarkdown>{displayedText}</ReactMarkdown>;
 }

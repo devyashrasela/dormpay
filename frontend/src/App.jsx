@@ -13,6 +13,8 @@ import SplitBillDetail from './pages/SplitBillDetail';
 import Analytics from './pages/Analytics';
 import AIChat from './pages/AIChat';
 import Settings from './pages/Settings';
+import LandingPage from './pages/LandingPage';
+import logo from './assets/logo.svg';
 
 // Toast context
 const ToastContext = createContext();
@@ -42,34 +44,17 @@ function ToastProvider({ children }) {
   );
 }
 
-// Login page
-function LoginPage() {
-  const { loginWithRedirect } = useAuth0();
-
-  return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-logo">
-          <span className="logo-dot" style={{ width: 10, height: 10 }}></span>
-          DormPay
-        </div>
-        <p className="login-subtitle">The Ledger — Student Payments on Algorand</p>
-        <button className="btn-primary" onClick={() => loginWithRedirect()}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 8h12M10 4l4 4-4 4" /></svg>
-          Sign In
-        </button>
-      </div>
-    </div>
-  );
-}
+// LoginPage is now replaced by LandingPage component
 
 // Loading screen
 function LoadingScreen() {
   return (
     <div className="loading-screen">
       <div className="login-logo" style={{ marginBottom: 0 }}>
-        <span className="logo-dot" style={{ width: 10, height: 10 }}></span>
-        DormPay
+        <div className="logo-icon-wrap">
+          <img src={logo} alt="DormPay" />
+        </div>
+        <span className="logo-text">DormPay</span>
       </div>
       <div className="loading-spinner"></div>
     </div>
@@ -95,7 +80,7 @@ export default function App() {
   }, [isAuthenticated, user, isProfileSynced]);
 
   if (isLoading) return <LoadingScreen />;
-  if (!isAuthenticated) return <LoginPage />;
+  if (!isAuthenticated) return <LandingPage />;
 
   return (
     <ToastProvider>

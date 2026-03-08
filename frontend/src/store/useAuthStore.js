@@ -50,6 +50,17 @@ const useAuthStore = create((set, get) => ({
         }
     },
 
+    // Mark setup as complete
+    completeSetup: async () => {
+        try {
+            const res = await api.put('/api/users/setup/complete');
+            set({ user: res.data.user });
+            return res.data.user;
+        } catch (err) {
+            console.error('completeSetup error:', err);
+        }
+    },
+
     logout: () => set({ user: null, isProfileSynced: false }),
 }));
 

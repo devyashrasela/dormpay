@@ -77,10 +77,12 @@ export default function History() {
                                 const otherName = isSent
                                     ? tx.receiver?.display_name || tx.receiver?.username || tx.receiver_address?.slice(0, 8)
                                     : tx.sender?.display_name || tx.sender?.username || tx.sender_address?.slice(0, 8);
+                                const txDate = tx.createdAt || tx.created_at;
+                                const displayStatus = tx.status === 'pending' ? 'confirmed' : tx.status;
 
                                 return (
                                     <tr key={tx.id}>
-                                        <td className="td-date">{formatDate(tx.created_at)}</td>
+                                        <td className="td-date">{formatDate(txDate)}</td>
                                         <td className="td-entity">{otherName}</td>
                                         <td className="td-hash" onClick={() => copyTxId(tx.txn_id)} title="Click to copy">
                                             {shortenTxId(tx.txn_id)}
@@ -89,7 +91,7 @@ export default function History() {
                                             {isSent ? '−' : '+'}{formatAlgo(tx.amount)} ALGO
                                         </td>
                                         <td>
-                                            <span className={`status-pill ${tx.status}`}>{tx.status}</span>
+                                            <span className={`status-pill ${displayStatus}`}>{displayStatus}</span>
                                         </td>
                                     </tr>
                                 );

@@ -2,17 +2,21 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import useAuthStore from '../store/useAuthStore';
+import usePeraWallet from '../hooks/usePeraWallet';
 import { useToast } from '../App';
 import { formatAlgo, getInitials } from '../utils/formatters';
+import { buildPaymentTxn, submitTransaction } from '../utils/algorand';
 
 export default function SplitBillDetail() {
     const { id } = useParams();
     const { user } = useAuthStore();
+    const { connectedAddress, signTransactions, connect } = usePeraWallet();
     const showToast = useToast();
     const navigate = useNavigate();
     const [bill, setBill] = useState(null);
     const [balances, setBalances] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [settling, setSettling] = useState(false);
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showAddMember, setShowAddMember] = useState(false);
 
@@ -37,8 +41,32 @@ export default function SplitBillDetail() {
     if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="loading-spinner"></div></div>;
     if (!bill) return <div style={{ padding: 40, color: 'var(--color-muted)' }}>Bill not found.</div>;
 
-    const mySettlements = balances?.settlements?.filter((s) => s.from_user_id === user?.id) || [];
-    const owedToMe = balances?.settlements?.filter((s) => s.to_user_id === user?.id) || [];
+    const userId = Number(user?.id);
+    const mySettlements = balances?.settlements?.filter((s) => Number(s.from_user_id) === userId) || [];
+    const owedToMe = balances?.settlements?.filter((s) => Number(s.to_user_id) === userId) || [];
+
+    // Calculate net amounts per person (auto-netting within group)
+    const netByPerson = {};
+    for (const s of (balances?.settlements || [])) {
+        const fromId = Number(s.from_user_id);
+        const toId = Number(s.to_user_id);
+        if (fromId === userId) {
+            // I owe this person
+            const key = toId;
+            netByPerson[key] = netByPerson[key] || { userId: toId, username: s.to_username, displayName: s.to_display_name, amount: 0 };
+            netByPerson[key].amount -= Number(s.amount);
+        }
+        if (toId === userId) {
+            // This person owes me
+            const key = fromId;
+            netByPerson[key] = netByPerson[key] || { userId: fromId, username: s.from_username, displayName: s.from_display_name, amount: 0 };
+            netByPerson[key].amount += Number(s.amount);
+        }
+    }
+    // Positive = they owe me, Negative = I owe them
+    const netSummary = Object.values(netByPerson).filter(n => Math.abs(n.amount) > 0.0001);
+    const totalIOwe = netSummary.filter(n => n.amount < 0).reduce((sum, n) => sum + Math.abs(n.amount), 0);
+    const totalOwedToMe = netSummary.filter(n => n.amount > 0).reduce((sum, n) => sum + n.amount, 0);
 
     return (
         <div>
@@ -79,6 +107,39 @@ export default function SplitBillDetail() {
                 </div>
             )}
 
+            {/* Net Balance Summary — shows auto-netting result */}
+            {user && bill.status === 'active' && netSummary.length > 0 && (
+                <div style={{ background: 'white', border: '1px solid var(--color-border-strong)', padding: '16px 20px', marginTop: 16, marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 10 }}>Your Net Balance (Auto-Settled)</div>
+                    {netSummary.map((n, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: i < netSummary.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                            <span style={{ fontSize: 13 }}>
+                                {n.amount < 0 ? (
+                                    <>You owe <strong>@{n.username}</strong></>
+                                ) : (
+                                    <><strong>@{n.username}</strong> owes you</>
+                                )}
+                            </span>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13, color: n.amount < 0 ? 'var(--color-warning)' : 'var(--color-success)' }}>
+                                {formatAlgo(Math.abs(n.amount))} ALGO
+                            </span>
+                        </div>
+                    ))}
+                    {totalIOwe > 0 && (
+                        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--color-border-strong)', paddingTop: 10 }}>
+                            <span style={{ fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total you owe</span>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--color-warning)' }}>{formatAlgo(totalIOwe)} ALGO</span>
+                        </div>
+                    )}
+                    {totalOwedToMe > 0 && (
+                        <div style={{ marginTop: totalIOwe > 0 ? 4 : 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', ...(totalIOwe === 0 ? { borderTop: '1px solid var(--color-border-strong)', paddingTop: 10 } : {}) }}>
+                            <span style={{ fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total owed to you</span>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--color-success)' }}>{formatAlgo(totalOwedToMe)} ALGO</span>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="split-cols" style={{ marginTop: 16 }}>
                 {/* Left: Balances & Settlements */}
                 <div>
@@ -95,13 +156,14 @@ export default function SplitBillDetail() {
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <span className="split-mono" style={{ color: 'var(--color-warning)' }}>{formatAlgo(s.amount)} ALGO</span>
-                                        {s.from_user_id === user?.id && bill.status === 'active' && (
+                                        {Number(s.from_user_id) === userId && bill.status === 'active' && (
                                             <button
                                                 className="btn-lime"
                                                 style={{ padding: '4px 8px', fontSize: 9 }}
                                                 onClick={() => handleSettle(s)}
+                                                disabled={settling}
                                             >
-                                                Settle
+                                                {settling ? '...' : 'Settle'}
                                             </button>
                                         )}
                                     </div>
@@ -212,15 +274,66 @@ export default function SplitBillDetail() {
     );
 
     async function handleSettle(settlement) {
+        if (!connectedAddress) {
+            try { await connect(); } catch { showToast('Please connect wallet first'); return; }
+        }
+
+        // Need the recipient's wallet address
+        if (!settlement.to_wallet_address) {
+            // Fetch it from the user lookup
+            try {
+                const res = await api.get(`/api/users/lookup/${settlement.to_username}`);
+                settlement.to_wallet_address = res.data.user.wallet_address;
+            } catch {
+                showToast('Could not find recipient wallet');
+                return;
+            }
+        }
+
+        setSettling(true);
         try {
+            // 1. Build Algorand transaction
+            const txn = await buildPaymentTxn({
+                from: connectedAddress,
+                to: settlement.to_wallet_address,
+                amount: settlement.amount,
+                note: `Split bill settlement`,
+            });
+
+            // 2. Sign with Pera Wallet
+            const signedTxn = await signTransactions([[{ txn, signers: [connectedAddress] }]]);
+
+            // 3. Submit to Algorand network
+            const txId = await submitTransaction(signedTxn[0]);
+
+            // 4. Record on backend with txn_id
             await api.post(`/api/split-bills/${id}/settle`, {
                 to_user_id: settlement.to_user_id,
                 amount: settlement.amount,
+                txn_id: txId,
             });
+
+            // 5. Also save as a regular transaction
+            await api.post('/api/transactions', {
+                txn_id: txId,
+                receiver_address: settlement.to_wallet_address,
+                amount: settlement.amount,
+                asset_type: 'ALGO',
+                note: `Split bill settlement`,
+            });
+
             fetchAll();
             showToast(`Settled ${formatAlgo(settlement.amount)} ALGO to @${settlement.to_username}`);
         } catch (err) {
-            showToast(err.response?.data?.error || 'Settlement failed');
+            console.error('Settlement error:', err);
+            const msg = err.message || 'Settlement failed';
+            if (msg.includes('below min') || msg.includes('balance')) {
+                showToast('Insufficient balance — account needs ≥0.1 ALGO minimum');
+            } else {
+                showToast(err.response?.data?.error || msg);
+            }
+        } finally {
+            setSettling(false);
         }
     }
 }

@@ -176,6 +176,46 @@ export default function Settings() {
                 )}
             </div>
 
+            {/* Notification Sounds */}
+            <div className="settings-card">
+                <div className="settings-card-title">Notification Sounds</div>
+
+                <div className="toggle-row">
+                    <div>
+                        <div className="toggle-label">Incoming Payment Sound</div>
+                        <div className="toggle-desc">Play a chime when you receive funds</div>
+                    </div>
+                    <button
+                        className={`toggle-switch ${localStorage.getItem('sound_incoming') !== 'false' ? 'on' : ''}`}
+                        onClick={() => {
+                            const current = localStorage.getItem('sound_incoming') !== 'false';
+                            localStorage.setItem('sound_incoming', !current);
+                            showToast(!current ? 'Incoming sound on' : 'Incoming sound off');
+                            // Force re-render
+                            setVoiceLoading(v => !v);
+                            setTimeout(() => setVoiceLoading(v => !v), 0);
+                        }}
+                    />
+                </div>
+
+                <div className="toggle-row">
+                    <div>
+                        <div className="toggle-label">Outgoing Payment Sound</div>
+                        <div className="toggle-desc">Play confirmation when you send payments</div>
+                    </div>
+                    <button
+                        className={`toggle-switch ${localStorage.getItem('sound_outgoing') !== 'false' ? 'on' : ''}`}
+                        onClick={() => {
+                            const current = localStorage.getItem('sound_outgoing') !== 'false';
+                            localStorage.setItem('sound_outgoing', !current);
+                            showToast(!current ? 'Outgoing sound on' : 'Outgoing sound off');
+                            setVoiceLoading(v => !v);
+                            setTimeout(() => setVoiceLoading(v => !v), 0);
+                        }}
+                    />
+                </div>
+            </div>
+
             {/* Sign Out */}
             <div className="settings-card" style={{ background: 'var(--color-petrol)', color: 'var(--color-cream)' }}>
                 <button

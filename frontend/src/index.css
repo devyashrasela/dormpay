@@ -86,15 +86,33 @@ body::before {
   margin-bottom: 48px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.logo-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--color-lime);
-  border: 1.5px solid var(--color-petrol);
-  display: inline-block;
+.logo-icon-wrap {
+  width: 42px;
+  height: 42px;
+  background: #E4FD30;
+  border-radius: 10px;
+  border: 2px solid #114851;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logo-icon-wrap img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.logo-text {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: #114851;
+  letter-spacing: -0.02em;
 }
 
 .nav {
@@ -1303,5 +1321,366 @@ body::before {
 
   to {
     transform: translateY(0);
+  }
+}
+
+/* ═══════════════════ MOBILE BOTTOM NAV ═══════════════════ */
+.mobile-nav {
+  display: none;
+}
+
+.mobile-header {
+  display: none;
+}
+
+/* ═══════════════════ RESPONSIVE — TABLET ≤1024px ═══════════════════ */
+@media (max-width: 1024px) {
+  .shell {
+    grid-template-columns: 220px 1fr;
+  }
+
+  .right-rail {
+    display: none;
+  }
+
+  .center-stage {
+    padding: 32px 28px;
+  }
+
+  .hero-card {
+    padding: 32px 28px;
+  }
+
+  .balance-amount {
+    font-size: 56px;
+  }
+
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .split-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ═══════════════════ RESPONSIVE — MOBILE ≤768px ═══════════════════ */
+@media (max-width: 768px) {
+  .shell {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  /* Hide desktop sidebar */
+  .left-rail {
+    display: none;
+  }
+
+  /* Show mobile header */
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--color-border-strong);
+    background: var(--color-cream);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .mobile-header .logo {
+    margin-bottom: 0;
+    font-size: 18px;
+  }
+
+  /* Show mobile bottom nav */
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--color-cream);
+    border-top: 1px solid var(--color-border-strong);
+    z-index: 50;
+    padding: 6px 0;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    justify-content: space-around;
+  }
+
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 8px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+    min-width: 52px;
+  }
+
+  .mobile-nav-item svg {
+    width: 18px;
+    height: 18px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+
+  .mobile-nav-item.active {
+    color: var(--color-petrol);
+  }
+
+  .mobile-nav-item.active svg {
+    opacity: 1;
+  }
+
+  /* Content spacing with bottom nav */
+  .center-stage {
+    padding: 20px 16px 100px;
+    min-height: calc(100vh - 60px);
+  }
+
+  /* Hero card */
+  .hero-card {
+    padding: 24px 20px;
+    margin-bottom: 20px;
+  }
+
+  .hero-card::before {
+    top: 14px;
+    right: 16px;
+    font-size: 8px;
+  }
+
+  .balance-amount {
+    font-size: 42px;
+    margin-bottom: 8px;
+  }
+
+  .balance-amount span {
+    font-size: 20px !important;
+  }
+
+  .balance-unit {
+    font-size: 16px;
+  }
+
+  .balance-convert {
+    font-size: 11px;
+  }
+
+  /* Stat strip */
+  .stat-strip {
+    grid-template-columns: 1fr 1fr 1fr;
+    margin-bottom: 20px;
+  }
+
+  .stat-cell {
+    padding: 12px 10px;
+  }
+
+  .stat-cell-label {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  .stat-cell-value {
+    font-size: 18px;
+  }
+
+  /* Action grid — 4 cols but smaller on mobile */
+  .action-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 24px;
+  }
+
+  .action-btn {
+    padding: 14px 6px;
+    gap: 6px;
+  }
+
+  .action-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .action-btn span {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  /* Transactions */
+  .tx-row {
+    grid-template-columns: 28px 1fr auto;
+    gap: 10px;
+    padding: 12px 2px;
+  }
+
+  .tx-name {
+    font-size: 13px;
+  }
+
+  .tx-amount {
+    font-size: 12px;
+  }
+
+  .tx-time {
+    font-size: 9px;
+  }
+
+  /* Forms */
+  .field-input {
+    font-size: 22px;
+  }
+
+  .field-input.sm {
+    font-size: 16px;
+  }
+
+  .amount-input {
+    font-size: 36px;
+  }
+
+  .btn-primary {
+    height: 52px;
+    font-size: 11px;
+  }
+
+  /* Modal */
+  .modal {
+    width: 100%;
+    max-width: 100vw;
+    max-height: 100vh;
+    box-shadow: none;
+    border-left: none;
+    border-right: none;
+  }
+
+  .modal-body {
+    padding: 20px 16px;
+  }
+
+  /* Chat */
+  .chat-container {
+    height: calc(100vh - 160px);
+  }
+
+  .chat-bubble {
+    max-width: 88%;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+
+  .chat-input {
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+
+  /* Analytics */
+  .analytics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .chart-card {
+    padding: 16px;
+  }
+
+  /* Split bill */
+  .split-cols {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  /* Data table — scrollable */
+  .data-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Settings */
+  .settings-card {
+    padding: 16px;
+  }
+
+  /* QR card */
+  .qr-card {
+    max-width: 100%;
+    padding: 28px 20px;
+  }
+
+  /* Section label */
+  .section-label {
+    font-size: 9px;
+    margin-bottom: 14px;
+  }
+
+  /* Toast */
+  .toast {
+    top: auto;
+    bottom: 80px;
+    right: 16px;
+    left: 16px;
+    font-size: 10px;
+  }
+
+  /* Success overlay */
+  .success-check {
+    font-size: 48px;
+  }
+
+  .success-text {
+    font-size: 10px;
+  }
+
+  /* Login */
+  .login-card {
+    padding: 32px 24px;
+    margin: 0 16px;
+  }
+
+  .login-logo {
+    font-size: 26px;
+  }
+
+  /* Filter bar */
+  .filter-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+
+  .filter-tag {
+    padding: 5px 12px;
+    font-size: 9px;
+  }
+}
+
+/* ═══════════════════ RESPONSIVE — SMALL MOBILE ≤480px ═══════════════════ */
+@media (max-width: 480px) {
+  .stat-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .action-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .balance-amount {
+    font-size: 36px;
+  }
+
+  .hero-card {
+    padding: 20px 16px;
   }
 }
