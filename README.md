@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/devyashrasela/dormpay/main/frontend/src/assets/logo.svg" alt="DormPay Logo" width="120" height="120" />
+
 # DormPay
 
 ### Next-Gen Campus Payment Infrastructure
@@ -16,7 +18,6 @@
 </div>
 
 ---
-
 
 ## What is DormPay?
 
@@ -278,6 +279,26 @@ dormpay/
 │
 └── README.md
 ```
+
+---
+
+## Screenshots
+
+<div align="center">
+
+### Landing Page
+*Modern, high-octane design showcasing DormPay's capabilities*
+
+### Dashboard
+*Real-time wallet balance, transaction history, and analytics*
+
+### Bill Splitting
+*Effortless group expense management with automated distribution*
+
+### AI Chat Assistant
+*Gemini-powered conversational interface for transaction help*
+
+</div>
 
 ---
 
