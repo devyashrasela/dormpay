@@ -110,10 +110,11 @@ module.exports = {
         logging: false,
         define: sharedDefine,
         pool: {
-            max: 20,
-            min: 5,
-            acquire: 30000,
-            idle: 10000,
+            max: 2,       // Serverless: keep very low — each function gets its own pool
+            min: 0,       // Release all idle connections immediately
+            acquire: 10000,
+            idle: 0,      // Close idle connections right away
+            evict: 5000,  // Check for idle connections every 5s
         },
     },
 };

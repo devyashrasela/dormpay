@@ -11,7 +11,10 @@ module.exports = async (req, res) => {
     if (!dbInitialized) {
         try {
             await db.sequelize.authenticate();
-            await db.sequelize.sync();
+            // Only sync in development — in production, use migrations
+            if (process.env.NODE_ENV !== 'production') {
+                await db.sequelize.sync();
+            }
             dbInitialized = true;
         } catch (error) {
             console.error('DB init error:', error.message);
