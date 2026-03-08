@@ -1,5 +1,8 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import logo from '../assets/logo.svg';
+import mayankImg from '../assets/mayank.avif';
+import devyashImg from '../assets/devyash.avif';
+import basilImg from '../assets/basil.avif';
 import './LandingPage.css';
 
 /* ── SVG Icon Components ── */
@@ -29,12 +32,9 @@ export default function LandingPage() {
                     <span className="lp-nav-brand-name">DORMPAY</span>
                 </div>
                 <div className="lp-nav-links">
-                    <a href="#features">Network</a>
-                    <a href="#protocol">Protocol</a>
-                    <a href="#team">ZeroLag</a>
                 </div>
                 <button className="lp-nav-cta" onClick={() => loginWithRedirect()}>
-                    Get Started
+                    Login
                 </button>
             </nav>
 
@@ -76,7 +76,7 @@ export default function LandingPage() {
 
                         <div className="lp-wallet-card">
                             <div className="lp-card-header">
-                                <div className="lp-card-dp-logo">DP</div>
+                                <div className="lp-card-dp-logo"><img src={logo} alt="DormPay" style={{ width: 24, height: 24 }} /></div>
                                 <div className="lp-card-labels">
                                     <p className="sub">DormPay Platinum</p>
                                     <p className="main">Verified Node</p>
@@ -201,9 +201,9 @@ export default function LandingPage() {
                                 <path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
                             </svg>
                         </div>
-                        <h3 className="lp-feature-title">NFC Fund Transfer</h3>
+                        <h3 className="lp-feature-title">DormDrop</h3>
                         <p className="lp-feature-desc">
-                            Proximity-based P2P payments. Tap to settle. No QR codes, no typing, just seamless proximity settlement via ZeroLag tech.
+                            The app detects nearby active users using geolocation, queries the backend for users within 50 meters, and displays them as avatars on a radar interface.
                         </p>
                         <div className="lp-nfc-widget">
                             <span>Searching for peers...</span>
@@ -228,7 +228,7 @@ export default function LandingPage() {
 
                     {/* Settlement Latency */}
                     <div className="lp-func-card cream-card">
-                        <div className="lp-func-big-num">0ms</div>
+                        <div className="lp-func-big-num">0<span style={{ fontSize: 24 }}>ms</span></div>
                         <div className="lp-func-label">Settlement Latency</div>
                     </div>
 
@@ -243,12 +243,7 @@ export default function LandingPage() {
                     {/* Active Campus Nodes */}
                     <div className="lp-func-card white-card lp-func-full">
                         <div className="lp-func-stat-row">
-                            <span className="big">10k+</span>
-                            <span className="desc">Active Campus Nodes</span>
-                        </div>
-                        <div className="lp-func-line"></div>
-                        <div style={{ textAlign: 'right' }}>
-                            <button className="lp-func-map-btn">View Network Map</button>
+                            <span className="desc" style={{ fontSize: 22, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2 }}>a new way to transfer money.</span>
                         </div>
                     </div>
                 </div>
@@ -258,48 +253,44 @@ export default function LandingPage() {
             <section className="lp-team" id="team">
                 <div className="lp-team-header">
                     <h2 className="lp-team-title">
-                        TEAM <br /><span className="lp-text-outline">ZEROLAG</span>
+                        The Minds Behind <br /><span className="lp-text-outline">DormPay</span>
                     </h2>
-                    <p className="lp-team-subtitle">The minds behind the campus disruption.</p>
                 </div>
 
                 <div className="lp-team-grid">
-                    {/* Devyash Rasela */}
-                    <div className="lp-team-card">
-                        <div className="lp-team-photo">
-                            <img alt="Devyash Rasela" src="https://lh3.googleusercontent.com/aida-public/AB6AXuATPxJ4MWfH14oyVZ42FJtr6CbwL6WT1ORhDawkdZPnUuAtTAy8L54YE8ICKrjwHr5ibo56H6rQT5eclEH3NwLpUb9JhY-eISlsRfNcLji26tx6CP0dAS5j40UEvjm8ZbaQxybe9VDhhmstW8m9mNLWwGJOXd08XmUAOqxLgBjI9-QUyTQnsfpvAEM28Gr6Xyifq0oksbkhG5N5xcJtjEkpD7DcnNhYXPcuOT0fy8Buuw_1Ar2ID2xBzzy-zy8OYsIKCY80VdrPbwA" />
-                        </div>
-                        <h3 className="lp-team-name">Devyash Rasela</h3>
-                        <p className="lp-team-role">Lead Architect / Smart Contracts</p>
-                        <div className="lp-team-socials">
-                            <a href="#"><GithubIcon /></a>
-                            <a href="#"><LinkedInIcon /></a>
-                        </div>
-                    </div>
-
                     {/* Mayank Padhi */}
                     <div className="lp-team-card">
                         <div className="lp-team-photo">
-                            <img alt="Mayank Padhi" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAd86DxbyZISo3kSHWQPwYJw8VWSeAzE4tBG_pRE6p5X1n-iXqdXmtwgIV0AefNzZB7LRcrvxZ86-fmhIUxLrcrgvbpeSfvg4qATFiOpDFgKfYbbOv1X9A1sIjm_fyNb9BtxJgC7ysoohuGHLJHYusyQzsgdFRwqsf4X1gOpK276vMb9ktLhBD1FvGXIwx-WTOE612FPi87uN78m3T2JDWkTmydOd2qzzFaK7k7xe70Z6hD2ob0_3P2v7-rmXSkvPp5FCcmYynCMi8" />
+                            <img src={mayankImg} alt="Mayank Padhi" />
                         </div>
                         <h3 className="lp-team-name">Mayank Padhi</h3>
-                        <p className="lp-team-role">Product Lead / UI Strategy</p>
                         <div className="lp-team-socials">
-                            <a href="#"><GithubIcon /></a>
-                            <a href="#"><LinkedInIcon /></a>
+                            <a href="https://www.linkedin.com/in/mayank-padhi-zia/" target="_blank" rel="noopener noreferrer"><LinkedInIcon /></a>
+                            <a href="https://github.com/Diclo-fenac" target="_blank" rel="noopener noreferrer"><GithubIcon /></a>
+                        </div>
+                    </div>
+
+                    {/* Devyash Rasela */}
+                    <div className="lp-team-card">
+                        <div className="lp-team-photo">
+                            <img src={devyashImg} alt="Devyash Rasela" />
+                        </div>
+                        <h3 className="lp-team-name">Devyash Rasela</h3>
+                        <div className="lp-team-socials">
+                            <a href="https://www.linkedin.com/in/devyash-rasela/" target="_blank" rel="noopener noreferrer"><LinkedInIcon /></a>
+                            <a href="https://github.com/devyashrasela" target="_blank" rel="noopener noreferrer"><GithubIcon /></a>
                         </div>
                     </div>
 
                     {/* Basil Zafar */}
                     <div className="lp-team-card">
                         <div className="lp-team-photo">
-                            <img alt="Basil Zafar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBcH3Fs_f7CjMpoeNCVy1DKrTC3YwJ0PYSibLpUk9i_5ZQ4lTRZXj70BUCKGWELqHuZqZBRN8perhjbdcutqn40fOZQMDJjh8IWMA_Ozo5zQHJo0CdIUD3_9XTZ9rmk7xENCMIKvzInhuC-rO_WrApLyPfzZ59OPs7n7kRujJA6UOGyY6puLVeqVCmsgYZV3NqcihJ69czv7m28pxwvNR6-g9FkodY5JubcxYmWOuV95P-p6QSJ1WAfZlAXEiA7wH7dNOUoqb19UMs" />
+                            <img src={basilImg} alt="Basil Zafar" />
                         </div>
                         <h3 className="lp-team-name">Basil Zafar</h3>
-                        <p className="lp-team-role">Backend Engineer / DevOps</p>
                         <div className="lp-team-socials">
-                            <a href="#"><GithubIcon /></a>
-                            <a href="#"><LinkedInIcon /></a>
+                            <a href="https://www.linkedin.com/in/basil-zafar-490b08302/" target="_blank" rel="noopener noreferrer"><LinkedInIcon /></a>
+                            <a href="https://github.com/BasilZafar11" target="_blank" rel="noopener noreferrer"><GithubIcon /></a>
                         </div>
                     </div>
                 </div>
@@ -308,7 +299,7 @@ export default function LandingPage() {
             {/* ═══ CTA Section ═══ */}
             <section className="lp-cta-section">
                 <div style={{ maxWidth: 640, margin: '0 auto' }}>
-                    <h2>Ready for zero lag?</h2>
+                    <h2>Ready for DormPay?</h2>
                     <p>The future of campus economy is waiting for you.</p>
                     <div className="lp-cta-form">
                         <input className="lp-cta-input" type="email" placeholder="Enter .edu email" />
@@ -322,28 +313,33 @@ export default function LandingPage() {
                 <div className="lp-footer-inner">
                     <div>
                         <div className="lp-footer-brand">
-                            <div className="lp-footer-logo">DP</div>
+                            <div className="lp-footer-logo"><img src={logo} alt="DormPay" style={{ width: 24, height: 24 }} /></div>
                             <span>DormPay</span>
                         </div>
-                        <p className="lp-footer-copy">© 2024 ZeroLag Inc. Built at YC Demo Day.</p>
+                        <p className="lp-footer-copy">© 2026 DormPay. Built at AceHack 5.0</p>
                     </div>
                     <div className="lp-footer-links">
                         <div className="lp-footer-col">
                             <span className="col-title">Product</span>
-                            <a href="#">Roadmap</a>
-                            <a href="#">Documentation</a>
+                            <a href="#features">Features</a>
+                            <a href="#protocol">How It Works</a>
+                            <a href="#team">Team</a>
+                        </div>
+                        <div className="lp-footer-col">
+                            <span className="col-title">Connect</span>
+                            <a href="https://github.com/devyashrasela/dormpay.git" target="_blank" rel="noopener noreferrer">GitHub Repo</a>
+                            <a href="mailto:devyashrasela@gmail.com">Email Us</a>
                         </div>
                         <div className="lp-footer-col">
                             <span className="col-title">Team</span>
-                            <a href="#">GitHub</a>
-                            <a href="#">LinkedIn</a>
-                        </div>
-                        <div className="lp-footer-col">
-                            <span className="col-title">Legal</span>
-                            <a href="#">Privacy</a>
-                            <a href="#">Terms</a>
+                            <a href="https://www.linkedin.com/in/mayank-padhi-zia/" target="_blank" rel="noopener noreferrer">Mayank Padhi</a>
+                            <a href="https://www.linkedin.com/in/devyash-rasela/" target="_blank" rel="noopener noreferrer">Devyash Rasela</a>
+                            <a href="https://www.linkedin.com/in/basil-zafar-490b08302/" target="_blank" rel="noopener noreferrer">Basil Zafar</a>
                         </div>
                     </div>
+                </div>
+                <div className="lp-footer-bottom">
+                    made with <span className="lp-heart">❤️</span> by ZeroLag
                 </div>
             </footer>
         </div>

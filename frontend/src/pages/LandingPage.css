@@ -1084,6 +1084,28 @@
     text-decoration: underline;
 }
 
+.lp-footer-bottom {
+    max-width: 1280px;
+    margin: 32px auto 0;
+    padding-top: 24px;
+    border-top: 1px solid rgba(245, 242, 234, 0.15);
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    opacity: 0.6;
+}
+
+.lp-heart {
+    display: inline-block;
+    transition: transform 0.3s;
+}
+
+.lp-footer-bottom:hover .lp-heart {
+    transform: scale(1.3);
+}
+
 /* ═══════════════════ LOGOUT CONFIRMATION MODAL ═══════════════════ */
 .logout-confirm-overlay {
     position: fixed;

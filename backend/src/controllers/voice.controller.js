@@ -51,9 +51,13 @@ const cloneVoice = async (req, res) => {
         const voiceName = `campuswallet_${user.username}_${Date.now()}`;
         const fileBuffer = fs.readFileSync(req.file.path);
 
+        // ElevenLabs SDK expects Blob or File-like objects, not raw Buffers
+        const fileBlob = new Blob([fileBuffer], { type: req.file.mimetype || 'audio/mpeg' });
+        fileBlob.name = req.file.originalname || 'voice_sample.mp3';
+
         const voice = await elevenlabs.voices.add({
             name: voiceName,
-            files: [fileBuffer],
+            files: [fileBlob],
             description: `CampusWallet voice clone for @${user.username}`,
         });
 
@@ -69,7 +73,8 @@ const cloneVoice = async (req, res) => {
         res.status(201).json({ message: 'Voice cloned successfully', profile });
     } catch (error) {
         console.error('cloneVoice error:', error);
-        res.status(500).json({ error: 'Failed to clone voice' });
+        const detail = error.body?.detail || error.message || 'Failed to clone voice';
+        res.status(500).json({ error: 'Failed to clone voice', detail });
     }
 };
 
