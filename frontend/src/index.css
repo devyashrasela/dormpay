@@ -1144,6 +1144,139 @@ body::before {
   transform: translateX(18px);
 }
 
+/* ═══════════════════ VOICE LIBRARY ═══════════════════ */
+.voice-library {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.voice-card {
+  border: 1px solid var(--color-border-strong);
+  padding: 16px;
+  background: var(--color-cream);
+  transition: border-color 0.2s, opacity 0.2s;
+}
+
+.voice-card:hover {
+  border-color: var(--color-petrol);
+}
+
+.voice-card--inactive {
+  opacity: 0.5;
+}
+
+.voice-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.voice-card-info {
+  flex: 1;
+}
+
+.voice-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-petrol);
+  margin-bottom: 2px;
+}
+
+.voice-card-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+.voice-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.voice-card-test-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border-strong);
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.voice-card-test-btn:hover {
+  background: var(--color-lime);
+  border-color: var(--color-petrol);
+}
+
+.voice-card-test-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-card-delete-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(220, 50, 50, 0.3);
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+  color: #dc3232;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.voice-card-delete-btn:hover {
+  background: rgba(220, 50, 50, 0.08);
+}
+
+.voice-card-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-card-controls .toggle-row {
+  padding: 8px 0;
+}
+
+.voice-card-controls .toggle-row:first-child {
+  padding-top: 0;
+}
+
+.voice-badge {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.voice-badge.outgoing {
+  background: var(--color-petrol);
+  color: var(--color-lime);
+}
+
+.voice-badge.incoming {
+  background: var(--color-lime);
+  color: var(--color-petrol);
+  border: 1px solid var(--color-petrol);
+}
+
+.toggle-switch:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 /* ═══════════════════ TOAST ═══════════════════ */
 .toast {
   position: fixed;

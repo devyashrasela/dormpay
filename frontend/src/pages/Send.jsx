@@ -198,6 +198,14 @@ export default function Send() {
 
             // Success
             setTxnStatus('success');
+
+            // Play voice TTS for outgoing payment (fire-and-forget)
+            try {
+                const audioRes = await api.post('/api/voice/generate', { direction: 'outgoing' }, { responseType: 'blob' });
+                const audioUrl = URL.createObjectURL(audioRes.data);
+                new Audio(audioUrl).play();
+            } catch (e) { /* voice not configured or failed — silent */ }
+
             setTimeout(() => {
                 setTxnStatus(null);
                 fetchBalance(connectedAddress);

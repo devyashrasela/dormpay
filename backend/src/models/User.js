@@ -86,7 +86,7 @@ module.exports = (sequelize) => {
         User.hasMany(models.SplitBillExpense, { foreignKey: 'paid_by_user_id' });
         User.hasMany(models.Notification, { foreignKey: 'user_id' });
         User.hasMany(models.ChatHistory, { foreignKey: 'user_id' });
-        User.hasOne(models.VoiceProfile, { foreignKey: 'user_id' });
+        User.hasMany(models.VoiceProfile, { foreignKey: 'user_id' });
     };
 
     return User;

@@ -41,33 +41,29 @@ const cloneVoice = async (req, res) => {
 
         if (!req.file) return res.status(400).json({ error: 'Voice sample file is required' });
 
-        // Check if user already has a voice profile
-        const existing = await VoiceProfile.findOne({ where: { user_id: user.id } });
-        if (existing) {
-            return res.status(409).json({ error: 'Voice profile already exists. Delete it first to clone a new one.' });
-        }
+        const voiceName = req.body.voice_name || `Voice ${Date.now()}`;
 
         // Send to ElevenLabs for cloning
-        const voiceName = `campuswallet_${user.username}_${Date.now()}`;
+        const elName = `campuswallet_${user.username}_${Date.now()}`;
         const fileBuffer = fs.readFileSync(req.file.path);
-
-        // ElevenLabs SDK expects Blob or File-like objects, not raw Buffers
         const fileBlob = new Blob([fileBuffer], { type: req.file.mimetype || 'audio/mpeg' });
         fileBlob.name = req.file.originalname || 'voice_sample.mp3';
 
         const voice = await elevenlabs.voices.add({
-            name: voiceName,
+            name: elName,
             files: [fileBlob],
-            description: `CampusWallet voice clone for @${user.username}`,
+            description: `CampusWallet voice clone "${voiceName}" for @${user.username}`,
         });
 
         // Save profile
         const profile = await VoiceProfile.create({
             user_id: user.id,
+            voice_name: voiceName,
             elevenlabs_voice_id: voice.voice_id,
             sample_url: `/uploads/voice/${req.file.filename}`,
-            voice_on_send: true,
-            voice_on_pay: true,
+            use_for_outgoing: false,
+            use_for_incoming: false,
+            is_active: true,
         });
 
         res.status(201).json({ message: 'Voice cloned successfully', profile });
@@ -78,17 +74,20 @@ const cloneVoice = async (req, res) => {
     }
 };
 
-// GET /api/voice/profile
-const getVoiceProfile = async (req, res) => {
+// GET /api/voice/profiles — Get all voice profiles for the user
+const getVoiceProfiles = async (req, res) => {
     try {
         const user = await User.findOne({ where: { auth0_sub: req.userSub } });
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        const profile = await VoiceProfile.findOne({ where: { user_id: user.id } });
-        res.json({ profile: profile || null });
+        const profiles = await VoiceProfile.findAll({
+            where: { user_id: user.id },
+            order: [['created_at', 'DESC']],
+        });
+        res.json({ profiles });
     } catch (error) {
-        console.error('getVoiceProfile error:', error);
-        res.status(500).json({ error: 'Failed to fetch voice profile' });
+        console.error('getVoiceProfiles error:', error);
+        res.status(500).json({ error: 'Failed to fetch voice profiles' });
     }
 };
 
@@ -98,16 +97,36 @@ const generateTTS = async (req, res) => {
         const user = await User.findOne({ where: { auth0_sub: req.userSub } });
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        const { text } = req.body;
-        if (!text) return res.status(400).json({ error: 'text is required' });
+        const { text, voice_id, direction } = req.body;
+        // direction: 'outgoing' | 'incoming' | undefined
 
-        const profile = await VoiceProfile.findOne({ where: { user_id: user.id } });
+        let voiceId = 'JBFqnCBsd6RMkjVDRZzb'; // Default: George
+        let ttsText = text || 'Payment processed';
 
-        // Use cloned voice or default
-        const voiceId = profile?.elevenlabs_voice_id || 'JBFqnCBsd6RMkjVDRZzb'; // Default: George
+        if (voice_id) {
+            // Use specific voice by profile ID (for test button)
+            const profile = await VoiceProfile.findOne({ where: { id: voice_id, user_id: user.id } });
+            if (profile) voiceId = profile.elevenlabs_voice_id;
+        } else if (direction === 'incoming') {
+            // Find voice set for incoming
+            const profile = await VoiceProfile.findOne({
+                where: { user_id: user.id, use_for_incoming: true, is_active: true },
+            });
+            if (!profile) return res.status(404).json({ error: 'No incoming voice configured' });
+            voiceId = profile.elevenlabs_voice_id;
+            ttsText = profile.incoming_message || ttsText;
+        } else {
+            // Default: use outgoing voice
+            const profile = await VoiceProfile.findOne({
+                where: { user_id: user.id, use_for_outgoing: true, is_active: true },
+            });
+            if (!profile) return res.status(404).json({ error: 'No outgoing voice configured' });
+            voiceId = profile.elevenlabs_voice_id;
+            ttsText = profile.outgoing_message || ttsText;
+        }
 
         const audio = await elevenlabs.textToSpeech.convert(voiceId, {
-            text,
+            text: ttsText,
             model_id: 'eleven_multilingual_v2',
             output_format: 'mp3_44100_128',
         });
@@ -116,13 +135,11 @@ const generateTTS = async (req, res) => {
         res.setHeader('Content-Type', 'audio/mpeg');
         res.setHeader('Content-Disposition', 'inline; filename="voice.mp3"');
 
-        // Handle both ReadableStream and Buffer
         if (audio instanceof Buffer) {
             res.send(audio);
         } else if (audio && typeof audio.pipe === 'function') {
             audio.pipe(res);
         } else {
-            // Convert async iterable to buffer
             const chunks = [];
             for await (const chunk of audio) {
                 chunks.push(chunk);
@@ -135,14 +152,14 @@ const generateTTS = async (req, res) => {
     }
 };
 
-// DELETE /api/voice/profile
+// DELETE /api/voice/profile/:id — Delete a specific voice profile
 const deleteVoiceProfile = async (req, res) => {
     try {
         const user = await User.findOne({ where: { auth0_sub: req.userSub } });
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        const profile = await VoiceProfile.findOne({ where: { user_id: user.id } });
-        if (!profile) return res.status(404).json({ error: 'No voice profile found' });
+        const profile = await VoiceProfile.findOne({ where: { id: req.params.id, user_id: user.id } });
+        if (!profile) return res.status(404).json({ error: 'Voice profile not found' });
 
         // Delete from ElevenLabs
         try {
@@ -167,27 +184,54 @@ const deleteVoiceProfile = async (req, res) => {
     }
 };
 
-// PUT /api/voice/toggle
+// PUT /api/voice/toggle/:id — Toggle settings for a specific voice
 const toggleVoice = async (req, res) => {
     try {
         const user = await User.findOne({ where: { auth0_sub: req.userSub } });
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        const profile = await VoiceProfile.findOne({ where: { user_id: user.id } });
-        if (!profile) return res.status(404).json({ error: 'No voice profile found' });
+        const profile = await VoiceProfile.findOne({ where: { id: req.params.id, user_id: user.id } });
+        if (!profile) return res.status(404).json({ error: 'Voice profile not found' });
 
-        const { voice_on_send, voice_on_pay } = req.body;
+        const { use_for_outgoing, use_for_incoming, is_active } = req.body;
+
+        // If setting this voice as outgoing, unset all others for this user
+        if (use_for_outgoing === true) {
+            await VoiceProfile.update(
+                { use_for_outgoing: false },
+                { where: { user_id: user.id, id: { [require('sequelize').Op.ne]: profile.id } } }
+            );
+        }
+
+        // If setting this voice as incoming, unset all others for this user
+        if (use_for_incoming === true) {
+            await VoiceProfile.update(
+                { use_for_incoming: false },
+                { where: { user_id: user.id, id: { [require('sequelize').Op.ne]: profile.id } } }
+            );
+        }
+
+        const { outgoing_message, incoming_message } = req.body;
 
         await profile.update({
-            voice_on_send: voice_on_send !== undefined ? voice_on_send : profile.voice_on_send,
-            voice_on_pay: voice_on_pay !== undefined ? voice_on_pay : profile.voice_on_pay,
+            use_for_outgoing: use_for_outgoing !== undefined ? use_for_outgoing : profile.use_for_outgoing,
+            use_for_incoming: use_for_incoming !== undefined ? use_for_incoming : profile.use_for_incoming,
+            is_active: is_active !== undefined ? is_active : profile.is_active,
+            outgoing_message: outgoing_message !== undefined ? outgoing_message : profile.outgoing_message,
+            incoming_message: incoming_message !== undefined ? incoming_message : profile.incoming_message,
         });
 
-        res.json({ message: 'Voice settings updated', profile });
+        // Return all profiles so frontend stays in sync
+        const profiles = await VoiceProfile.findAll({
+            where: { user_id: user.id },
+            order: [['created_at', 'DESC']],
+        });
+
+        res.json({ message: 'Voice settings updated', profiles });
     } catch (error) {
         console.error('toggleVoice error:', error);
         res.status(500).json({ error: 'Failed to update voice settings' });
     }
 };
 
-module.exports = { upload, cloneVoice, getVoiceProfile, generateTTS, deleteVoiceProfile, toggleVoice };
+module.exports = { upload, cloneVoice, getVoiceProfiles, generateTTS, deleteVoiceProfile, toggleVoice };

@@ -10,9 +10,14 @@ module.exports = (sequelize) => {
         user_id: {
             type: DataTypes.INTEGER,
             allowNull: false,
-            unique: true,
             references: { model: 'users', key: 'id' },
             onDelete: 'CASCADE',
+        },
+        voice_name: {
+            type: DataTypes.STRING(100),
+            allowNull: false,
+            defaultValue: 'My Voice',
+            comment: 'User-given name for this voice clone',
         },
         elevenlabs_voice_id: {
             type: DataTypes.STRING(100),
@@ -24,17 +29,35 @@ module.exports = (sequelize) => {
             allowNull: true,
             comment: 'Path to stored voice sample audio file',
         },
-        voice_on_send: {
+        use_for_outgoing: {
             type: DataTypes.BOOLEAN,
             allowNull: false,
-            defaultValue: true,
-            comment: 'Play voice when sending payments',
+            defaultValue: false,
+            comment: 'Use this voice when sending payments',
         },
-        voice_on_pay: {
+        use_for_incoming: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: false,
+            comment: 'Use this voice when receiving payments',
+        },
+        is_active: {
             type: DataTypes.BOOLEAN,
             allowNull: false,
             defaultValue: true,
-            comment: 'Play voice when settling split bills',
+            comment: 'Master on/off toggle for this voice',
+        },
+        outgoing_message: {
+            type: DataTypes.STRING(500),
+            allowNull: true,
+            defaultValue: 'Payment sent successfully!',
+            comment: 'Custom TTS message when sending payments',
+        },
+        incoming_message: {
+            type: DataTypes.STRING(500),
+            allowNull: true,
+            defaultValue: 'You received a payment!',
+            comment: 'Custom TTS message when receiving payments',
         },
     }, {
         tableName: 'voice_profiles',

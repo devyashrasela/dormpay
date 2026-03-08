@@ -124,10 +124,12 @@ const options = {
                     properties: {
                         id: { type: 'integer' },
                         user_id: { type: 'integer' },
+                        voice_name: { type: 'string', example: 'My Deep Voice' },
                         elevenlabs_voice_id: { type: 'string' },
                         sample_url: { type: 'string', nullable: true },
-                        voice_on_send: { type: 'boolean' },
-                        voice_on_pay: { type: 'boolean' },
+                        use_for_outgoing: { type: 'boolean' },
+                        use_for_incoming: { type: 'boolean' },
+                        is_active: { type: 'boolean' },
                     },
                 },
                 Error: {
@@ -611,7 +613,7 @@ const options = {
                 post: {
                     tags: ['Voice'],
                     summary: 'Clone voice from audio sample',
-                    description: 'Upload a 30-second voice sample → ElevenLabs creates a cloned voice.',
+                    description: 'Upload a voice sample + name → ElevenLabs creates a cloned voice. Supports multiple voices per user.',
                     security: [{ bearerAuth: [] }],
                     requestBody: {
                         required: true,
@@ -622,6 +624,7 @@ const options = {
                                     required: ['voice_sample'],
                                     properties: {
                                         voice_sample: { type: 'string', format: 'binary', description: 'Audio file (wav, mp3, webm, ogg). Max 10MB.' },
+                                        voice_name: { type: 'string', description: 'User-given name for this voice', example: 'My Deep Voice' },
                                     },
                                 },
                             },
@@ -629,27 +632,30 @@ const options = {
                     },
                     responses: {
                         201: { description: 'Voice cloned', content: { 'application/json': { schema: { type: 'object', properties: { message: { type: 'string' }, profile: { $ref: '#/components/schemas/VoiceProfile' } } } } } },
-                        409: { description: 'Voice profile already exists' },
                     },
                 },
             },
-            '/api/voice/profile': {
+            '/api/voice/profiles': {
                 get: {
                     tags: ['Voice'],
-                    summary: 'Get voice profile status',
+                    summary: 'Get all voice profiles',
+                    description: 'Returns all voice clones for the authenticated user.',
                     security: [{ bearerAuth: [] }],
                     responses: {
-                        200: { description: 'Voice profile', content: { 'application/json': { schema: { type: 'object', properties: { profile: { $ref: '#/components/schemas/VoiceProfile' } } } } } },
+                        200: { description: 'Voice profiles list', content: { 'application/json': { schema: { type: 'object', properties: { profiles: { type: 'array', items: { $ref: '#/components/schemas/VoiceProfile' } } } } } } },
                     },
                 },
+            },
+            '/api/voice/profile/{id}': {
                 delete: {
                     tags: ['Voice'],
-                    summary: 'Delete voice clone',
+                    summary: 'Delete a specific voice clone',
                     description: 'Deletes from ElevenLabs and removes local profile.',
                     security: [{ bearerAuth: [] }],
+                    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
                     responses: {
                         200: { description: 'Voice profile deleted' },
-                        404: { description: 'No voice profile found' },
+                        404: { description: 'Voice profile not found' },
                     },
                 },
             },
@@ -657,7 +663,7 @@ const options = {
                 post: {
                     tags: ['Voice'],
                     summary: 'Generate TTS audio',
-                    description: 'Returns MP3 audio using cloned voice (or default fallback).',
+                    description: 'Returns MP3 audio using a specific voice or the outgoing voice (or default fallback).',
                     security: [{ bearerAuth: [] }],
                     requestBody: {
                         required: true,
@@ -668,6 +674,7 @@ const options = {
                                     required: ['text'],
                                     properties: {
                                         text: { type: 'string', example: 'Sent 10 ALGO to @john!' },
+                                        voice_id: { type: 'integer', description: 'Optional: specific voice profile ID to use' },
                                     },
                                 },
                             },
@@ -678,28 +685,30 @@ const options = {
                     },
                 },
             },
-            '/api/voice/toggle': {
+            '/api/voice/toggle/{id}': {
                 put: {
                     tags: ['Voice'],
-                    summary: 'Toggle voice notification settings',
-                    description: 'Enable/disable voice on send and/or voice on pay.',
+                    summary: 'Toggle voice settings for a specific voice',
+                    description: 'Set use_for_outgoing/use_for_incoming/is_active. Setting outgoing/incoming on one voice auto-unsets others.',
                     security: [{ bearerAuth: [] }],
+                    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
                     requestBody: {
                         content: {
                             'application/json': {
                                 schema: {
                                     type: 'object',
                                     properties: {
-                                        voice_on_send: { type: 'boolean', description: 'Play voice when sending payments' },
-                                        voice_on_pay: { type: 'boolean', description: 'Play voice when settling split bills' },
+                                        use_for_outgoing: { type: 'boolean', description: 'Use this voice for outgoing payments' },
+                                        use_for_incoming: { type: 'boolean', description: 'Use this voice for incoming payments' },
+                                        is_active: { type: 'boolean', description: 'Master on/off toggle' },
                                     },
                                 },
                             },
                         },
                     },
                     responses: {
-                        200: { description: 'Settings updated', content: { 'application/json': { schema: { type: 'object', properties: { message: { type: 'string' }, profile: { $ref: '#/components/schemas/VoiceProfile' } } } } } },
-                        404: { description: 'No voice profile found' },
+                        200: { description: 'Settings updated, returns all profiles', content: { 'application/json': { schema: { type: 'object', properties: { message: { type: 'string' }, profiles: { type: 'array', items: { $ref: '#/components/schemas/VoiceProfile' } } } } } } },
+                        404: { description: 'Voice profile not found' },
                     },
                 },
             },

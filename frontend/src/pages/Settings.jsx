@@ -6,6 +6,7 @@ import useAuthStore from '../store/useAuthStore';
 import api from '../api/axios';
 import { useToast } from '../App';
 import { shortenAddress } from '../utils/algorand';
+import VoiceCard from '../components/Voice/VoiceCard';
 
 export default function Settings() {
     const { logout } = useAuth0();
@@ -13,17 +14,20 @@ export default function Settings() {
     const { user } = useAuthStore();
     const showToast = useToast();
 
-    const [voiceProfile, setVoiceProfile] = useState(null);
+    const [voiceProfiles, setVoiceProfiles] = useState([]);
     const [voiceLoading, setVoiceLoading] = useState(true);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [uploadName, setUploadName] = useState('');
+    const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef(null);
     const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
-    useEffect(() => { fetchVoiceProfile(); }, []);
+    useEffect(() => { fetchVoiceProfiles(); }, []);
 
-    const fetchVoiceProfile = async () => {
+    const fetchVoiceProfiles = async () => {
         try {
-            const res = await api.get('/api/voice/profile');
-            setVoiceProfile(res.data.profile);
+            const res = await api.get('/api/voice/profiles');
+            setVoiceProfiles(res.data.profiles || []);
         } catch (err) { console.error(err); }
         finally { setVoiceLoading(false); }
     };
@@ -32,53 +36,36 @@ export default function Settings() {
         const file = e.target.files[0];
         if (!file) return;
 
+        const name = uploadName.trim() || `Voice ${voiceProfiles.length + 1}`;
+
         const formData = new FormData();
         formData.append('voice_sample', file);
+        formData.append('voice_name', name);
 
         try {
+            setUploading(true);
             showToast('Cloning voice...');
             const res = await api.post('/api/voice/clone', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-            setVoiceProfile(res.data.profile);
+            setVoiceProfiles(prev => [res.data.profile, ...prev]);
+            setShowUploadModal(false);
+            setUploadName('');
             showToast('Voice cloned successfully');
         } catch (err) {
             showToast(err.response?.data?.error || 'Voice clone failed');
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
-    const deleteVoice = async () => {
-        try {
-            await api.delete('/api/voice/profile');
-            setVoiceProfile(null);
-            showToast('Voice profile deleted');
-        } catch (err) {
-            showToast('Failed to delete voice profile');
-        }
+    const handleProfilesUpdate = (updatedProfiles) => {
+        setVoiceProfiles(updatedProfiles);
     };
 
-    const toggleVoiceSetting = async (key) => {
-        if (!voiceProfile) return;
-        try {
-            const res = await api.put('/api/voice/toggle', {
-                [key]: !voiceProfile[key],
-            });
-            setVoiceProfile(res.data.profile);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    const testTTS = async () => {
-        try {
-            showToast('Generating voice...');
-            const res = await api.post('/api/voice/generate', { text: 'Sent 10 ALGO to your friend!' }, { responseType: 'blob' });
-            const url = URL.createObjectURL(res.data);
-            const audio = new Audio(url);
-            audio.play();
-        } catch (err) {
-            showToast('TTS failed');
-        }
+    const handleVoiceDelete = (deletedId) => {
+        setVoiceProfiles(prev => prev.filter(v => v.id !== deletedId));
     };
 
     return (
@@ -122,56 +109,37 @@ export default function Settings() {
                 )}
             </div>
 
-            {/* Voice */}
+            {/* Voice Library */}
             <div className="settings-card">
-                <div className="settings-card-title">Voice Clone — ElevenLabs</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div className="settings-card-title" style={{ marginBottom: 0 }}>Voice Library</div>
+                    <button className="btn-lime" style={{ fontSize: 12, padding: '6px 14px' }} onClick={() => setShowUploadModal(true)}>
+                        + Add Voice
+                    </button>
+                </div>
 
                 {voiceLoading ? (
                     <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}><div className="loading-spinner"></div></div>
-                ) : voiceProfile ? (
-                    <>
-                        <div style={{ fontSize: 13, marginBottom: 16 }}>
-                            <span className="status-pill confirmed">Voice Active</span>
-                            <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>
-                                ID: {voiceProfile.elevenlabs_voice_id?.slice(0, 12)}...
-                            </span>
-                        </div>
-
-                        <div className="toggle-row">
-                            <div>
-                                <div className="toggle-label">Voice on Send</div>
-                                <div className="toggle-desc">Play voice after sending payments</div>
-                            </div>
-                            <button
-                                className={`toggle-switch ${voiceProfile.voice_on_send ? 'on' : ''}`}
-                                onClick={() => toggleVoiceSetting('voice_on_send')}
+                ) : voiceProfiles.length > 0 ? (
+                    <div className="voice-library">
+                        {voiceProfiles.map(v => (
+                            <VoiceCard
+                                key={v.id}
+                                voice={v}
+                                onUpdate={handleProfilesUpdate}
+                                onDelete={handleVoiceDelete}
+                                showToast={showToast}
                             />
-                        </div>
-
-                        <div className="toggle-row">
-                            <div>
-                                <div className="toggle-label">Voice on Pay</div>
-                                <div className="toggle-desc">Play voice when settling splits</div>
-                            </div>
-                            <button
-                                className={`toggle-switch ${voiceProfile.voice_on_pay ? 'on' : ''}`}
-                                onClick={() => toggleVoiceSetting('voice_on_pay')}
-                            />
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 16 }}>
-                            <button className="btn-lime" onClick={testTTS}>Test Voice</button>
-                            <button className="btn-secondary" style={{ color: 'var(--color-petrol)', borderColor: 'var(--color-border-strong)' }} onClick={deleteVoice}>Delete Clone</button>
-                        </div>
-                    </>
+                        ))}
+                    </div>
                 ) : (
-                    <div>
-                        <div style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 16, lineHeight: 1.6 }}>
-                            Record a 30-second voice sample to create your AI voice clone. Your cloned voice will be used for payment confirmations.
+                    <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+                        <div style={{ fontSize: 32, marginBottom: 8 }}>🎙️</div>
+                        <div style={{ fontSize: 13, color: 'var(--color-muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                            No voices yet. Upload a 30-second voice sample to create your first AI voice clone.
                         </div>
-                        <input ref={fileInputRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={handleVoiceUpload} />
-                        <button className="btn-primary" style={{ height: 44 }} onClick={() => fileInputRef.current?.click()}>
-                            Upload Voice Sample
+                        <button className="btn-primary" style={{ height: 44 }} onClick={() => setShowUploadModal(true)}>
+                            Upload Your First Voice
                         </button>
                     </div>
                 )}
@@ -227,6 +195,52 @@ export default function Settings() {
                     Sign Out
                 </button>
             </div>
+
+            {/* Voice Upload Modal */}
+            {showUploadModal && (
+                <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowUploadModal(false)}>
+                    <div className="modal" style={{ width: 420 }}>
+                        <div className="modal-header">
+                            <span className="modal-title">Add New Voice</span>
+                            <button className="modal-close" onClick={() => { setShowUploadModal(false); setUploadName(''); }}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            <div style={{ fontSize: 13, color: 'var(--color-muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                                Upload a 30-second voice sample to clone your voice with ElevenLabs AI.
+                            </div>
+
+                            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Voice Name</label>
+                            <input
+                                type="text"
+                                className="voice-upload-input"
+                                placeholder="e.g. My Deep Voice"
+                                value={uploadName}
+                                onChange={(e) => setUploadName(e.target.value)}
+                                style={{
+                                    width: '100%', padding: '10px 12px', borderRadius: 8,
+                                    border: '1px solid var(--color-border)', background: 'var(--color-surface)',
+                                    color: 'var(--color-text)', fontSize: 14, marginBottom: 16,
+                                    fontFamily: 'var(--font-body)', boxSizing: 'border-box',
+                                }}
+                            />
+
+                            <input ref={fileInputRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={handleVoiceUpload} />
+                            <button
+                                className="btn-primary"
+                                style={{ width: '100%', height: 48 }}
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={uploading}
+                            >
+                                {uploading ? 'Cloning...' : '🎙️ Select Audio File'}
+                            </button>
+
+                            <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 8, textAlign: 'center' }}>
+                                Supports WAV, MP3, WebM, OGG • Max 10MB
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Disconnect Confirmation Modal */}
             {showDisconnectConfirm && (

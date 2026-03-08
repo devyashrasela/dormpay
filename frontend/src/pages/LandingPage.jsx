@@ -324,6 +324,7 @@ export default function LandingPage() {
                             <a href="#features">Features</a>
                             <a href="#protocol">How It Works</a>
                             <a href="#team">Team</a>
+                            <a href="https://dormpay.gitbook.io/dormpay-docs/" target="_blank" rel="noopener noreferrer">Documentation</a>
                         </div>
                         <div className="lp-footer-col">
                             <span className="col-title">Connect</span>

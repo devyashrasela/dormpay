@@ -92,9 +92,39 @@ const startServer = async () => {
         await db.sequelize.authenticate();
         console.log('✅ Database connection established');
 
-        // Sync models (creates tables if they don't exist, no alter to avoid duplicate key buildup)
+        // Sync models (creates tables if they don't exist)
         await db.sequelize.sync();
         console.log('✅ Database synced');
+
+        // Migrate voice_profiles: add new columns if missing
+        const qi = db.sequelize.getQueryInterface();
+        const vpCols = await qi.describeTable('voice_profiles').catch(() => null);
+        if (vpCols && !vpCols.voice_name) {
+            console.log('🔄 Migrating voice_profiles table...');
+            await db.sequelize.query(`ALTER TABLE voice_profiles
+              ADD COLUMN voice_name VARCHAR(255) DEFAULT 'My Voice',
+              ADD COLUMN use_for_outgoing TINYINT(1) DEFAULT 0,
+              ADD COLUMN use_for_incoming TINYINT(1) DEFAULT 0,
+              ADD COLUMN is_active TINYINT(1) DEFAULT 1`);
+            // Drop old columns if they exist
+            if (vpCols.voice_on_send) {
+                await db.sequelize.query(`ALTER TABLE voice_profiles DROP COLUMN voice_on_send, DROP COLUMN voice_on_pay`);
+            }
+            // Drop unique constraint on user_id if it exists
+            try {
+                await db.sequelize.query(`ALTER TABLE voice_profiles DROP INDEX user_id`);
+            } catch (e) { /* index may not exist */ }
+            console.log('✅ voice_profiles migration complete');
+        }
+        // Add custom message columns if missing
+        const vpCols2 = await qi.describeTable('voice_profiles').catch(() => null);
+        if (vpCols2 && !vpCols2.outgoing_message) {
+            console.log('🔄 Adding message columns to voice_profiles...');
+            await db.sequelize.query(`ALTER TABLE voice_profiles
+              ADD COLUMN outgoing_message VARCHAR(500) DEFAULT 'Payment sent successfully!',
+              ADD COLUMN incoming_message VARCHAR(500) DEFAULT 'You received a payment!'`);
+            console.log('✅ Message columns added');
+        }
 
         app.listen(PORT, () => {
             console.log(`🚀 Campus Wallet API running on http://localhost:${PORT}`);
