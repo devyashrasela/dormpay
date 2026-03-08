@@ -152,7 +152,7 @@ const getSessions = async (req, res) => {
 
         // Get all sessions with their first user message as preview
         const { sequelize } = require('../models');
-        const [sessions] = await sequelize.query(`
+        const results = await sequelize.query(`
             SELECT 
                 ch.session_id,
                 MIN(CASE WHEN ch.role = 'user' THEN ch.message END) AS preview,
@@ -165,10 +165,13 @@ const getSessions = async (req, res) => {
             LIMIT 20
         `, {
             replacements: { userId: user.id },
-            type: sequelize.QueryTypes ? sequelize.QueryTypes.SELECT : undefined,
+            type: sequelize.QueryTypes.SELECT,
         });
 
-        const formatted = (Array.isArray(sessions) ? sessions : []).map(s => ({
+        // sequelize.query with type SELECT returns a flat array of rows
+        const sessions = Array.isArray(results) ? results : [];
+
+        const formatted = sessions.map(s => ({
             session_id: s.session_id,
             preview: s.preview ? (s.preview.length > 60 ? s.preview.slice(0, 60) + '...' : s.preview) : 'Chat session',
             started_at: s.started_at,

@@ -43,7 +43,11 @@ export default function AIChat() {
             setSessionId(sid);
             setNewMsgIds(new Set());
             const res = await api.get(`/api/chat/history?session_id=${sid}`);
-            setMessages(res.data.history || []);
+            const history = (res.data.history || []).map((msg, idx) => ({
+                ...msg,
+                id: msg.id || `loaded-${idx}`,
+            }));
+            setMessages(history);
         } catch (err) {
             console.error('Failed to load session:', err);
         }
