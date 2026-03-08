@@ -16,6 +16,7 @@ export default function Settings() {
     const [voiceProfile, setVoiceProfile] = useState(null);
     const [voiceLoading, setVoiceLoading] = useState(true);
     const fileInputRef = useRef(null);
+    const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
     useEffect(() => { fetchVoiceProfile(); }, []);
 
@@ -111,7 +112,7 @@ export default function Settings() {
                                     {shortenAddress(connectedAddress, 8)}
                                 </div>
                             </div>
-                            <button className="link-btn" onClick={disconnect}>Disconnect</button>
+                            <button className="link-btn" onClick={() => setShowDisconnectConfirm(true)}>Disconnect</button>
                         </div>
                     </div>
                 ) : (
@@ -226,6 +227,45 @@ export default function Settings() {
                     Sign Out
                 </button>
             </div>
+
+            {/* Disconnect Confirmation Modal */}
+            {showDisconnectConfirm && (
+                <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowDisconnectConfirm(false)}>
+                    <div className="modal" style={{ width: 400 }}>
+                        <div className="modal-header">
+                            <span className="modal-title">Disconnect Wallet</span>
+                            <button className="modal-close" onClick={() => setShowDisconnectConfirm(false)}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 8 }}>
+                                Are you sure you want to disconnect your Pera Wallet?
+                            </div>
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-muted)', marginBottom: 20 }}>
+                                {shortenAddress(connectedAddress, 8)}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--color-warning)', marginBottom: 20 }}>
+                                You will need to reconnect to send payments or settle split bills.
+                            </div>
+                            <div className="confirm-actions">
+                                <button className="btn-lime" style={{ height: 48 }} onClick={() => setShowDisconnectConfirm(false)}>
+                                    Cancel
+                                </button>
+                                <button
+                                    className="btn-primary"
+                                    style={{ height: 48 }}
+                                    onClick={() => {
+                                        disconnect();
+                                        setShowDisconnectConfirm(false);
+                                        showToast('Wallet disconnected');
+                                    }}
+                                >
+                                    Disconnect
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

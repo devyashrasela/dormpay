@@ -1192,6 +1192,203 @@ body::before {
   color: var(--color-petrol);
 }
 
+/* ═══════════════════ TRANSACTION STATUS OVERLAY ═══════════════════ */
+.txn-status-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s both;
+  padding: 40px;
+}
+
+.txn-status-overlay.processing {
+  background: var(--color-cream);
+}
+
+.txn-status-overlay.success {
+  background: var(--color-lime);
+}
+
+.txn-status-overlay.error {
+  background: var(--color-cream);
+}
+
+.txn-status-icon {
+  font-size: 56px;
+  font-family: var(--font-serif);
+  margin-bottom: 20px;
+  animation: fadeIn 0.4s both;
+}
+
+.txn-status-overlay.processing .txn-status-icon {
+  animation: txnPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes txnPulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.7;
+  }
+}
+
+.txn-status-title {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--color-petrol);
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.txn-status-subtitle {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-bottom: 32px;
+  text-align: center;
+  max-width: 340px;
+}
+
+.txn-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 280px;
+}
+
+.txn-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+  color: var(--color-muted);
+  transition: color 0.3s, opacity 0.3s;
+}
+
+.txn-step:last-child {
+  border-bottom: none;
+}
+
+.txn-step.active {
+  color: var(--color-petrol);
+  font-weight: 600;
+}
+
+.txn-step.done {
+  color: var(--color-success);
+}
+
+.txn-step.failed {
+  color: #dc3232;
+}
+
+.txn-step-dot {
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.txn-step.active .txn-step-dot {
+  background: var(--color-petrol);
+  color: var(--color-lime);
+  border-color: var(--color-petrol);
+}
+
+.txn-step.done .txn-step-dot {
+  background: var(--color-success);
+  color: white;
+  border-color: var(--color-success);
+}
+
+.txn-step.failed .txn-step-dot {
+  background: #dc3232;
+  color: white;
+  border-color: #dc3232;
+}
+
+.txn-error-msg {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #dc3232;
+  background: rgba(220, 50, 50, 0.08);
+  border: 1px solid rgba(220, 50, 50, 0.25);
+  padding: 12px 16px;
+  margin-top: 20px;
+  max-width: 360px;
+  text-align: center;
+  word-break: break-word;
+}
+
+/* ═══════════════════ CONFIRM MODAL ═══════════════════ */
+.confirm-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.confirm-detail:last-child {
+  border-bottom: none;
+}
+
+.confirm-detail-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.confirm-detail-value {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-petrol);
+}
+
+.confirm-amount {
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 300;
+  color: var(--color-petrol);
+  text-align: center;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--color-border-strong);
+  margin-bottom: 8px;
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.integer-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-warning);
+  margin-top: 4px;
+}
+
 /* ═══════════════════ CHARTS ═══════════════════ */
 .analytics-grid {
   display: grid;

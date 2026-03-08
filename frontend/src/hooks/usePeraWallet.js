@@ -7,8 +7,8 @@ import api from '../api/axios';
 const peraWallet = new PeraWalletConnect();
 
 export default function usePeraWallet() {
-    const { connectedAddress, setConnectedAddress, setPeraWallet, fetchBalance, fetchAssets } = useWalletStore();
-    const { updateProfile } = useAuthStore();
+    const { connectedAddress, setConnectedAddress, setPeraWallet, fetchBalance, fetchAssets, manuallyDisconnected } = useWalletStore();
+    const { user, updateProfile } = useAuthStore();
     const reconnectAttempted = useRef(false);
 
     useEffect(() => {
@@ -23,9 +23,31 @@ export default function usePeraWallet() {
                         peraWallet.connector?.on('disconnect', handleDisconnect);
                     }
                 })
-                .catch(() => { /* not connected */ });
+                .catch(() => {
+                    // reconnectSession failed — check if we have a persisted address
+                    // from localStorage (via Zustand persist) or backend profile
+                    const persistedAddress = useWalletStore.getState().connectedAddress;
+                    if (persistedAddress) {
+                        // We have a persisted address, keep it so the UI shows it.
+                        // The user may need to re-approve via Pera for signing,
+                        // but at least they can see their balance and address.
+                        console.log('Pera session lost, using persisted wallet address');
+                    } else if (user?.wallet_address) {
+                        // Fallback: restore from backend profile
+                        setConnectedAddress(user.wallet_address);
+                        console.log('Restored wallet address from backend profile');
+                    }
+                });
         }
     }, []);
+
+    // Also restore from backend profile when user becomes available
+    // but NOT if user explicitly disconnected
+    useEffect(() => {
+        if (!connectedAddress && !manuallyDisconnected && user?.wallet_address) {
+            setConnectedAddress(user.wallet_address);
+        }
+    }, [user]);
 
     // Refresh balance when address changes
     useEffect(() => {
@@ -77,8 +99,9 @@ export default function usePeraWallet() {
     }, []);
 
     const disconnect = useCallback(() => {
-        peraWallet.disconnect();
-        setConnectedAddress(null);
+        try { peraWallet.disconnect(); } catch (e) { /* ignore */ }
+        // This sets manuallyDisconnected=true in the store, preventing auto-restore
+        useWalletStore.getState().disconnect();
     }, []);
 
     const signTransactions = useCallback(async (txnGroups) => {

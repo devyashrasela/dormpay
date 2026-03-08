@@ -17,14 +17,17 @@ export default function Send() {
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
     const [note, setNote] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(false);
     const [resolvedAddress, setResolvedAddress] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [scanning, setScanning] = useState(false);
     const debounceRef = useRef(null);
     const scannerRef = useRef(null);
+
+    // Confirmation & transaction status state
+    const [showConfirm, setShowConfirm] = useState(false);
+    const [txnStatus, setTxnStatus] = useState(null); // null | 'signing' | 'submitting' | 'saving' | 'success' | 'error'
+    const [txnError, setTxnError] = useState('');
 
     // Cleanup scanner on unmount
     useEffect(() => {
@@ -47,7 +50,6 @@ export default function Send() {
         if (isValidAddress(value)) {
             setResolvedAddress(value);
         } else if (value.length >= 2) {
-            // Treat as username search (strip @ if user types it)
             const query = value.startsWith('@') ? value.slice(1) : value;
             if (query.length >= 2) {
                 debounceRef.current = setTimeout(async () => {
@@ -56,24 +58,28 @@ export default function Send() {
                         const users = res.data.users || [];
                         setSuggestions(users);
                         setShowSuggestions(users.length > 0);
-
-                        // Auto-resolve if exact match
                         const exact = users.find(u => u.username === query);
-                        if (exact) {
-                            setResolvedAddress(exact.wallet_address);
-                        }
+                        if (exact) setResolvedAddress(exact.wallet_address);
                     } catch { /* ignore */ }
                 }, 400);
             }
         }
     }, []);
 
-    // Select user from dropdown
     const selectUser = (user) => {
         setRecipient(`@${user.username}`);
         setResolvedAddress(user.wallet_address);
         setSuggestions([]);
         setShowSuggestions(false);
+    };
+
+    // Integer-only amount handler
+    const handleAmountChange = (e) => {
+        const val = e.target.value;
+        // Only allow digits (integer values)
+        if (val === '' || /^\d+$/.test(val)) {
+            setAmount(val);
+        }
     };
 
     // QR Scanner
@@ -86,7 +92,6 @@ export default function Send() {
                 { facingMode: 'environment' },
                 { fps: 10, qrbox: { width: 250, height: 250 } },
                 (text) => {
-                    // Check if it's a valid Algorand address
                     const addr = text.replace('algorand://', '').split('?')[0];
                     if (isValidAddress(addr)) {
                         setRecipient(addr);
@@ -97,7 +102,7 @@ export default function Send() {
                     }
                     stopScanner();
                 },
-                () => { } // ignore scan errors
+                () => { }
             );
         } catch (err) {
             console.error('Scanner error:', err);
@@ -114,64 +119,201 @@ export default function Send() {
         setScanning(false);
     };
 
-    const executeSend = async () => {
+    // Show confirmation before executing
+    const handleSendClick = () => {
         const toAddress = resolvedAddress;
         if (!toAddress) { showToast('Invalid recipient'); return; }
-        if (!amount || parseFloat(amount) <= 0) { showToast('Enter a valid amount'); return; }
+        if (!amount || parseInt(amount) <= 0) { showToast('Enter a valid amount (whole numbers only)'); return; }
+        setShowConfirm(true);
+    };
+
+    // Execute the actual transaction
+    const executeSend = async () => {
+        setShowConfirm(false);
+        const toAddress = resolvedAddress;
+        const intAmount = parseInt(amount);
+
         if (!connectedAddress) {
             try { await connect(); } catch { showToast('Please connect wallet first'); return; }
         }
 
-        setLoading(true);
+        setTxnStatus('signing');
+        setTxnError('');
+
         try {
+            // Step 1: Build & Sign
             const txn = await buildPaymentTxn({
                 from: connectedAddress,
                 to: toAddress,
-                amount: parseFloat(amount),
+                amount: intAmount,
                 note,
             });
-
-            // Sign with Pera Wallet
             const signedTxn = await signTransactions([[{ txn, signers: [connectedAddress] }]]);
 
-            // Submit to Algorand
+            // Step 2: Submit to Algorand
+            setTxnStatus('submitting');
             const txId = await submitTransaction(signedTxn[0]);
 
-            // Save metadata to backend
+            // Step 3: Save to backend
+            setTxnStatus('saving');
             await api.post('/api/transactions', {
                 txn_id: txId,
                 receiver_address: toAddress,
-                amount: parseFloat(amount),
+                amount: intAmount,
                 asset_type: 'ALGO',
                 asset_id: 0,
                 note,
             });
 
-            setSuccess(true);
+            // Success
+            setTxnStatus('success');
             setTimeout(() => {
-                setSuccess(false);
+                setTxnStatus(null);
                 fetchBalance(connectedAddress);
                 navigate('/');
-            }, 2000);
+            }, 2500);
 
         } catch (err) {
             console.error('Send error:', err);
             const msg = err.message || 'Transaction failed';
             if (msg.includes('below min') || msg.includes('balance')) {
-                showToast('Insufficient balance — account needs ≥0.1 ALGO minimum');
+                setTxnError('Insufficient balance — account needs ≥0.1 ALGO minimum');
             } else {
-                showToast(msg);
+                setTxnError(msg);
             }
-        } finally {
-            setLoading(false);
+            setTxnStatus('error');
         }
     };
 
-    if (success) {
+    const dismissError = () => {
+        setTxnStatus(null);
+        setTxnError('');
+    };
+
+    const displayRecipient = recipient.startsWith('@')
+        ? recipient
+        : resolvedAddress
+            ? `${resolvedAddress.slice(0, 8)}...${resolvedAddress.slice(-6)}`
+            : recipient;
+
+    // Transaction Status Overlay
+    if (txnStatus) {
+        const steps = [
+            { key: 'signing', label: 'Signing transaction' },
+            { key: 'submitting', label: 'Submitting to Algorand' },
+            { key: 'saving', label: 'Recording transaction' },
+        ];
+
+        const stepOrder = ['signing', 'submitting', 'saving'];
+        const currentIdx = stepOrder.indexOf(txnStatus);
+        const isSuccess = txnStatus === 'success';
+        const isError = txnStatus === 'error';
+
         return (
-            <div className="success-overlay" style={{ position: 'relative', height: 'calc(100vh - 80px)' }}>
-                <div className="success-check">✓</div>
-                <div className="success-text">Transfer Complete</div>
+            <div className={`txn-status-overlay ${isSuccess ? 'success' : isError ? 'error' : 'processing'}`}>
+                <div className="txn-status-icon">
+                    {isSuccess ? '✓' : isError ? '✕' : '⟳'}
+                </div>
+                <div className="txn-status-title">
+                    {isSuccess ? 'Transfer Complete' : isError ? 'Transaction Failed' : 'Processing Transfer'}
+                </div>
+                <div className="txn-status-subtitle">
+                    {isSuccess
+                        ? `${amount} ALGO sent successfully`
+                        : isError
+                            ? 'Something went wrong during the transaction'
+                            : 'Please wait while your transaction is being processed...'}
+                </div>
+
+                {!isSuccess && (
+                    <div className="txn-steps">
+                        {steps.map((step, i) => {
+                            let cls = '';
+                            if (isError && i === currentIdx) cls = 'failed';
+                            else if (isError && i < currentIdx) cls = 'done';
+                            else if (i < currentIdx) cls = 'done';
+                            else if (i === currentIdx) cls = 'active';
+
+                            return (
+                                <div key={step.key} className={`txn-step ${cls}`}>
+                                    <div className="txn-step-dot">
+                                        {cls === 'done' ? '✓' : cls === 'failed' ? '✕' : cls === 'active' ? '›' : (i + 1)}
+                                    </div>
+                                    <span>{step.label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {isError && (
+                    <>
+                        <div className="txn-error-msg">{txnError}</div>
+                        <button
+                            className="btn-primary"
+                            style={{ width: 'auto', height: 44, padding: '0 32px', marginTop: 24 }}
+                            onClick={dismissError}
+                        >
+                            Close
+                        </button>
+                    </>
+                )}
+            </div>
+        );
+    }
+
+    // Confirmation Modal
+    if (showConfirm) {
+        return (
+            <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowConfirm(false)}>
+                <div className="modal" style={{ width: 440 }}>
+                    <div className="modal-header">
+                        <span className="modal-title">Confirm Transfer</span>
+                        <button className="modal-close" onClick={() => setShowConfirm(false)}>✕</button>
+                    </div>
+                    <div className="modal-body">
+                        <div className="confirm-amount">
+                            {amount} <span style={{ fontSize: 20, opacity: 0.4 }}>ALGO</span>
+                        </div>
+                        <div className="confirm-detail">
+                            <span className="confirm-detail-label">To</span>
+                            <span className="confirm-detail-value">{displayRecipient}</span>
+                        </div>
+                        <div className="confirm-detail">
+                            <span className="confirm-detail-label">From</span>
+                            <span className="confirm-detail-value" style={{ fontSize: 11 }}>
+                                {connectedAddress ? `${connectedAddress.slice(0, 8)}...${connectedAddress.slice(-6)}` : 'Not connected'}
+                            </span>
+                        </div>
+                        {note && (
+                            <div className="confirm-detail">
+                                <span className="confirm-detail-label">Note</span>
+                                <span style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--color-muted)' }}>{note}</span>
+                            </div>
+                        )}
+                        <div className="confirm-detail">
+                            <span className="confirm-detail-label">≈ INR</span>
+                            <span className="confirm-detail-value">₹{algoToINR(amount || 0)}</span>
+                        </div>
+
+                        <div className="confirm-actions">
+                            <button
+                                className="btn-lime"
+                                style={{ height: 48 }}
+                                onClick={() => setShowConfirm(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn-primary"
+                                style={{ height: 48 }}
+                                onClick={executeSend}
+                            >
+                                Confirm & Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -286,19 +428,20 @@ export default function Send() {
                 )}
 
                 <div className="field-group">
-                    <label className="field-label">Amount</label>
+                    <label className="field-label">Amount (ALGO)</label>
                     <div>
                         <input
                             className="amount-input"
-                            placeholder="0.00"
-                            type="number"
-                            step="0.01"
-                            min="0"
+                            placeholder="0"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
+                            onChange={handleAmountChange}
                         />
                     </div>
                     <div className="amount-convert">≈ ₹{algoToINR(amount || 0)} INR</div>
+                    <div className="integer-hint">Only whole number amounts allowed</div>
                 </div>
 
                 <div className="field-group">
@@ -315,18 +458,12 @@ export default function Send() {
 
                 <button
                     className="btn-primary"
-                    onClick={executeSend}
-                    disabled={loading || !resolvedAddress || !amount}
+                    onClick={handleSendClick}
+                    disabled={!resolvedAddress || !amount}
                     style={{ marginTop: 28 }}
                 >
-                    {loading ? (
-                        <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div>
-                    ) : (
-                        <>
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 8h12M10 4l4 4-4 4" /></svg>
-                            Execute Transfer
-                        </>
-                    )}
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 8h12M10 4l4 4-4 4" /></svg>
+                    Review Transfer
                 </button>
             </div>
         </div>

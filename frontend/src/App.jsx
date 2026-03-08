@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { setTokenGetter } from './api/axios';
 import useAuthStore from './store/useAuthStore';
+import useWalletStore from './store/useWalletStore';
 import Layout from './components/Layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Send from './pages/Send';
@@ -64,6 +65,7 @@ function LoadingScreen() {
 export default function App() {
   const { isAuthenticated, isLoading, user, getAccessTokenSilently } = useAuth0();
   const { syncUser, isProfileSynced } = useAuthStore();
+  const { connectedAddress, setConnectedAddress } = useWalletStore();
 
   // Set token getter for axios interceptor
   useEffect(() => {
@@ -78,6 +80,18 @@ export default function App() {
       syncUser(user);
     }
   }, [isAuthenticated, user, isProfileSynced]);
+
+  // Restore wallet address from backend profile if not already connected
+  // but NOT if user explicitly disconnected
+  useEffect(() => {
+    const { manuallyDisconnected } = useWalletStore.getState();
+    if (isProfileSynced && !connectedAddress && !manuallyDisconnected) {
+      const backendUser = useAuthStore.getState().user;
+      if (backendUser?.wallet_address) {
+        setConnectedAddress(backendUser.wallet_address);
+      }
+    }
+  }, [isProfileSynced, connectedAddress]);
 
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <LandingPage />;

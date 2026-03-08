@@ -16,9 +16,13 @@ export default function SplitBillDetail() {
     const [bill, setBill] = useState(null);
     const [balances, setBalances] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [settling, setSettling] = useState(false);
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [showAddMember, setShowAddMember] = useState(false);
+
+    // Settlement confirmation & status
+    const [pendingSettle, setPendingSettle] = useState(null);
+    const [txnStatus, setTxnStatus] = useState(null); // null | 'signing' | 'submitting' | 'saving' | 'success' | 'error'
+    const [txnError, setTxnError] = useState('');
 
     useEffect(() => { fetchAll(); }, [id]);
 
@@ -51,22 +55,160 @@ export default function SplitBillDetail() {
         const fromId = Number(s.from_user_id);
         const toId = Number(s.to_user_id);
         if (fromId === userId) {
-            // I owe this person
             const key = toId;
             netByPerson[key] = netByPerson[key] || { userId: toId, username: s.to_username, displayName: s.to_display_name, amount: 0 };
             netByPerson[key].amount -= Number(s.amount);
         }
         if (toId === userId) {
-            // This person owes me
             const key = fromId;
             netByPerson[key] = netByPerson[key] || { userId: fromId, username: s.from_username, displayName: s.from_display_name, amount: 0 };
             netByPerson[key].amount += Number(s.amount);
         }
     }
-    // Positive = they owe me, Negative = I owe them
     const netSummary = Object.values(netByPerson).filter(n => Math.abs(n.amount) > 0.0001);
     const totalIOwe = netSummary.filter(n => n.amount < 0).reduce((sum, n) => sum + Math.abs(n.amount), 0);
     const totalOwedToMe = netSummary.filter(n => n.amount > 0).reduce((sum, n) => sum + n.amount, 0);
+
+    // Show settlement confirmation
+    const confirmSettle = (settlement) => {
+        setPendingSettle(settlement);
+    };
+
+    // Execute settlement after confirmation
+    async function executeSettle() {
+        const settlement = pendingSettle;
+        setPendingSettle(null);
+
+        if (!connectedAddress) {
+            try { await connect(); } catch { showToast('Please connect wallet first'); return; }
+        }
+
+        // Need the recipient's wallet address
+        if (!settlement.to_wallet_address) {
+            try {
+                const res = await api.get(`/api/users/lookup/${settlement.to_username}`);
+                settlement.to_wallet_address = res.data.user.wallet_address;
+            } catch {
+                showToast('Could not find recipient wallet');
+                return;
+            }
+        }
+
+        setTxnStatus('signing');
+        setTxnError('');
+
+        try {
+            // Step 1: Build & Sign
+            const txn = await buildPaymentTxn({
+                from: connectedAddress,
+                to: settlement.to_wallet_address,
+                amount: settlement.amount,
+                note: `Split bill settlement`,
+            });
+            const signedTxn = await signTransactions([[{ txn, signers: [connectedAddress] }]]);
+
+            // Step 2: Submit to Algorand
+            setTxnStatus('submitting');
+            const txId = await submitTransaction(signedTxn[0]);
+
+            // Step 3: Record on backend
+            setTxnStatus('saving');
+            await api.post(`/api/split-bills/${id}/settle`, {
+                to_user_id: settlement.to_user_id,
+                amount: settlement.amount,
+                txn_id: txId,
+            });
+
+            // Also save as a regular transaction
+            await api.post('/api/transactions', {
+                txn_id: txId,
+                receiver_address: settlement.to_wallet_address,
+                amount: settlement.amount,
+                asset_type: 'ALGO',
+                note: `Split bill settlement`,
+            });
+
+            // Success
+            setTxnStatus('success');
+            setTimeout(() => {
+                setTxnStatus(null);
+                fetchAll();
+            }, 2500);
+
+        } catch (err) {
+            console.error('Settlement error:', err);
+            const msg = err.message || 'Settlement failed';
+            if (msg.includes('below min') || msg.includes('balance')) {
+                setTxnError('Insufficient balance — account needs ≥0.1 ALGO minimum');
+            } else {
+                setTxnError(err.response?.data?.error || msg);
+            }
+            setTxnStatus('error');
+        }
+    }
+
+    const dismissError = () => {
+        setTxnStatus(null);
+        setTxnError('');
+    };
+
+    // Transaction Status Overlay
+    if (txnStatus) {
+        const steps = [
+            { key: 'signing', label: 'Signing transaction' },
+            { key: 'submitting', label: 'Submitting to Algorand' },
+            { key: 'saving', label: 'Recording settlement' },
+        ];
+        const stepOrder = ['signing', 'submitting', 'saving'];
+        const currentIdx = stepOrder.indexOf(txnStatus);
+        const isSuccess = txnStatus === 'success';
+        const isError = txnStatus === 'error';
+
+        return (
+            <div className={`txn-status-overlay ${isSuccess ? 'success' : isError ? 'error' : 'processing'}`}>
+                <div className="txn-status-icon">
+                    {isSuccess ? '✓' : isError ? '✕' : '⟳'}
+                </div>
+                <div className="txn-status-title">
+                    {isSuccess ? 'Settlement Complete' : isError ? 'Settlement Failed' : 'Processing Settlement'}
+                </div>
+                <div className="txn-status-subtitle">
+                    {isSuccess
+                        ? 'Your debt has been settled on-chain'
+                        : isError
+                            ? 'Something went wrong during the settlement'
+                            : 'Please wait while your settlement is being processed...'}
+                </div>
+                {!isSuccess && (
+                    <div className="txn-steps">
+                        {steps.map((step, i) => {
+                            let cls = '';
+                            if (isError && i === currentIdx) cls = 'failed';
+                            else if (isError && i < currentIdx) cls = 'done';
+                            else if (i < currentIdx) cls = 'done';
+                            else if (i === currentIdx) cls = 'active';
+                            return (
+                                <div key={step.key} className={`txn-step ${cls}`}>
+                                    <div className="txn-step-dot">
+                                        {cls === 'done' ? '✓' : cls === 'failed' ? '✕' : cls === 'active' ? '›' : (i + 1)}
+                                    </div>
+                                    <span>{step.label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+                {isError && (
+                    <>
+                        <div className="txn-error-msg">{txnError}</div>
+                        <button className="btn-primary" style={{ width: 'auto', height: 44, padding: '0 32px', marginTop: 24 }} onClick={dismissError}>
+                            Close
+                        </button>
+                    </>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div>
@@ -107,7 +249,7 @@ export default function SplitBillDetail() {
                 </div>
             )}
 
-            {/* Net Balance Summary — shows auto-netting result */}
+            {/* Net Balance Summary */}
             {user && bill.status === 'active' && netSummary.length > 0 && (
                 <div style={{ background: 'white', border: '1px solid var(--color-border-strong)', padding: '16px 20px', marginTop: 16, marginBottom: 8 }}>
                     <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-muted)', marginBottom: 10 }}>Your Net Balance (Auto-Settled)</div>
@@ -143,7 +285,6 @@ export default function SplitBillDetail() {
             <div className="split-cols" style={{ marginTop: 16 }}>
                 {/* Left: Balances & Settlements */}
                 <div>
-                    {/* Who owes whom */}
                     <div className="split-col-label">Settlements Needed</div>
                     {balances?.settlements?.length > 0 ? (
                         <div className="split-result">
@@ -160,10 +301,9 @@ export default function SplitBillDetail() {
                                             <button
                                                 className="btn-lime"
                                                 style={{ padding: '4px 8px', fontSize: 9 }}
-                                                onClick={() => handleSettle(s)}
-                                                disabled={settling}
+                                                onClick={() => confirmSettle(s)}
                                             >
-                                                {settling ? '...' : 'Settle'}
+                                                Settle
                                             </button>
                                         )}
                                     </div>
@@ -252,6 +392,46 @@ export default function SplitBillDetail() {
                 </div>
             </div>
 
+            {/* Settlement Confirmation Modal */}
+            {pendingSettle && (
+                <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setPendingSettle(null)}>
+                    <div className="modal" style={{ width: 420 }}>
+                        <div className="modal-header">
+                            <span className="modal-title">Confirm Settlement</span>
+                            <button className="modal-close" onClick={() => setPendingSettle(null)}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="confirm-amount">
+                                {formatAlgo(pendingSettle.amount)} <span style={{ fontSize: 20, opacity: 0.4 }}>ALGO</span>
+                            </div>
+                            <div className="confirm-detail">
+                                <span className="confirm-detail-label">To</span>
+                                <span className="confirm-detail-value">@{pendingSettle.to_username}</span>
+                            </div>
+                            <div className="confirm-detail">
+                                <span className="confirm-detail-label">From</span>
+                                <span className="confirm-detail-value" style={{ fontSize: 11 }}>
+                                    {connectedAddress ? `${connectedAddress.slice(0, 8)}...${connectedAddress.slice(-6)}` : 'Not connected'}
+                                </span>
+                            </div>
+                            <div className="confirm-detail">
+                                <span className="confirm-detail-label">Purpose</span>
+                                <span style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--color-muted)' }}>Split bill settlement</span>
+                            </div>
+
+                            <div className="confirm-actions">
+                                <button className="btn-lime" style={{ height: 48 }} onClick={() => setPendingSettle(null)}>
+                                    Cancel
+                                </button>
+                                <button className="btn-primary" style={{ height: 48 }} onClick={executeSettle}>
+                                    Confirm & Settle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Add Expense Modal */}
             {showAddExpense && (
                 <AddExpenseModal
@@ -272,73 +452,9 @@ export default function SplitBillDetail() {
             )}
         </div>
     );
-
-    async function handleSettle(settlement) {
-        if (!connectedAddress) {
-            try { await connect(); } catch { showToast('Please connect wallet first'); return; }
-        }
-
-        // Need the recipient's wallet address
-        if (!settlement.to_wallet_address) {
-            // Fetch it from the user lookup
-            try {
-                const res = await api.get(`/api/users/lookup/${settlement.to_username}`);
-                settlement.to_wallet_address = res.data.user.wallet_address;
-            } catch {
-                showToast('Could not find recipient wallet');
-                return;
-            }
-        }
-
-        setSettling(true);
-        try {
-            // 1. Build Algorand transaction
-            const txn = await buildPaymentTxn({
-                from: connectedAddress,
-                to: settlement.to_wallet_address,
-                amount: settlement.amount,
-                note: `Split bill settlement`,
-            });
-
-            // 2. Sign with Pera Wallet
-            const signedTxn = await signTransactions([[{ txn, signers: [connectedAddress] }]]);
-
-            // 3. Submit to Algorand network
-            const txId = await submitTransaction(signedTxn[0]);
-
-            // 4. Record on backend with txn_id
-            await api.post(`/api/split-bills/${id}/settle`, {
-                to_user_id: settlement.to_user_id,
-                amount: settlement.amount,
-                txn_id: txId,
-            });
-
-            // 5. Also save as a regular transaction
-            await api.post('/api/transactions', {
-                txn_id: txId,
-                receiver_address: settlement.to_wallet_address,
-                amount: settlement.amount,
-                asset_type: 'ALGO',
-                note: `Split bill settlement`,
-            });
-
-            fetchAll();
-            showToast(`Settled ${formatAlgo(settlement.amount)} ALGO to @${settlement.to_username}`);
-        } catch (err) {
-            console.error('Settlement error:', err);
-            const msg = err.message || 'Settlement failed';
-            if (msg.includes('below min') || msg.includes('balance')) {
-                showToast('Insufficient balance — account needs ≥0.1 ALGO minimum');
-            } else {
-                showToast(err.response?.data?.error || msg);
-            }
-        } finally {
-            setSettling(false);
-        }
-    }
 }
 
-// Add Expense Modal — Google-style with payer selection & split-among checkboxes
+// Add Expense Modal — with integer-only amount
 function AddExpenseModal({ bill, userId, onClose, onAdded }) {
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
@@ -352,15 +468,26 @@ function AddExpenseModal({ bill, userId, onClose, onAdded }) {
         );
     };
 
-    const perPerson = splitAmong.length > 0 && amount ? (parseFloat(amount) / splitAmong.length).toFixed(2) : '0.00';
+    // Integer-only amount handler
+    const handleAmountChange = (e) => {
+        const val = e.target.value;
+        if (val === '' || /^\d+$/.test(val)) {
+            setAmount(val);
+        }
+    };
+
+    const perPerson = splitAmong.length > 0 && amount ? Math.floor(parseInt(amount) / splitAmong.length) : 0;
+    const remainder = splitAmong.length > 0 && amount ? parseInt(amount) % splitAmong.length : 0;
 
     const handleSubmit = async () => {
         if (!description || !amount || splitAmong.length === 0) return;
+        const intAmount = parseInt(amount);
+        if (intAmount <= 0) return;
         setLoading(true);
         try {
             await api.post(`/api/split-bills/${bill.id}/expenses`, {
                 description,
-                amount: parseFloat(amount),
+                amount: intAmount,
                 paid_by_user_id: paidByUserId,
                 split_among: splitAmong,
             });
@@ -388,8 +515,18 @@ function AddExpenseModal({ bill, userId, onClose, onAdded }) {
                     </div>
 
                     <div className="field-group">
-                        <label className="field-label">Amount</label>
-                        <input className="amount-input" style={{ fontSize: 40 }} placeholder="0.00" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                        <label className="field-label">Amount (ALGO)</label>
+                        <input
+                            className="amount-input"
+                            style={{ fontSize: 40 }}
+                            placeholder="0"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={amount}
+                            onChange={handleAmountChange}
+                        />
+                        <div className="integer-hint">Only whole number amounts allowed</div>
                     </div>
 
                     <div className="field-group">
@@ -424,6 +561,11 @@ function AddExpenseModal({ bill, userId, onClose, onAdded }) {
                         {splitAmong.length > 0 && amount && (
                             <div style={{ marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-muted)' }}>
                                 {perPerson} ALGO per person ({splitAmong.length} people)
+                                {remainder > 0 && (
+                                    <span style={{ color: 'var(--color-warning)', marginLeft: 8 }}>
+                                        +{remainder} ALGO remainder
+                                    </span>
+                                )}
                             </div>
                         )}
                     </div>

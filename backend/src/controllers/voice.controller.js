@@ -7,7 +7,9 @@ const fs = require('fs');
 // Multer config for voice uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'voice');
+        const uploadDir = process.env.VERCEL
+            ? '/tmp/uploads/voice'
+            : path.join(__dirname, '..', '..', 'uploads', 'voice');
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
         }
@@ -146,7 +148,9 @@ const deleteVoiceProfile = async (req, res) => {
 
         // Delete local sample file
         if (profile.sample_url) {
-            const filePath = path.join(__dirname, '..', '..', profile.sample_url);
+            const filePath = process.env.VERCEL
+                ? path.join('/tmp', profile.sample_url)
+                : path.join(__dirname, '..', '..', profile.sample_url);
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
 
