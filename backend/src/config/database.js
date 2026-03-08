@@ -2,21 +2,65 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 
-// Load SSL CA certificate if path is provided
+// Load SSL CA certificate
 let dialectOptions = {};
-if (process.env.DB_CA_CERT_PATH) {
-    const caPath = path.resolve(__dirname, '..', '..', process.env.DB_CA_CERT_PATH);
-    if (fs.existsSync(caPath)) {
+
+// Option 1: Load cert content directly from env var (best for serverless)
+if (process.env.DB_CA_CERT) {
+    try {
+        const certContent = Buffer.from(process.env.DB_CA_CERT, 'base64').toString('utf8');
         dialectOptions = {
             ssl: {
-                ca: fs.readFileSync(caPath, 'utf8'),
+                ca: certContent,
                 rejectUnauthorized: true,
             },
         };
-        console.log('✅ SSL CA certificate loaded for database connection');
-    } else {
-        console.warn('⚠️  DB_CA_CERT_PATH set but file not found:', caPath);
+        console.log('✅ SSL CA certificate loaded from DB_CA_CERT env var');
+    } catch (err) {
+        console.warn('⚠️  Failed to decode DB_CA_CERT:', err.message);
     }
+}
+
+// Option 2: Load cert from file path
+if (!dialectOptions.ssl && process.env.DB_CA_CERT_PATH) {
+    // Try multiple possible paths for serverless compatibility
+    const possiblePaths = [
+        path.resolve(__dirname, '..', '..', process.env.DB_CA_CERT_PATH),
+        path.resolve(process.cwd(), process.env.DB_CA_CERT_PATH),
+        path.resolve('/var/task/backend', process.env.DB_CA_CERT_PATH),
+        process.env.DB_CA_CERT_PATH,
+    ];
+
+    let caContent = null;
+    for (const caPath of possiblePaths) {
+        if (fs.existsSync(caPath)) {
+            caContent = fs.readFileSync(caPath, 'utf8');
+            console.log('✅ SSL CA certificate loaded from:', caPath);
+            break;
+        }
+    }
+
+    if (caContent) {
+        dialectOptions = {
+            ssl: {
+                ca: caContent,
+                rejectUnauthorized: true,
+            },
+        };
+    } else {
+        console.warn('⚠️  DB_CA_CERT_PATH set but file not found in any expected location');
+        console.warn('   Tried:', possiblePaths.join(', '));
+    }
+}
+
+// Fallback: enable SSL without CA cert (works with Aiven and most cloud DBs)
+if (!dialectOptions.ssl && (process.env.DB_SSL === 'true' || process.env.DB_HOST)) {
+    dialectOptions = {
+        ssl: {
+            rejectUnauthorized: false,
+        },
+    };
+    console.log('✅ SSL enabled for database connection (no CA cert, rejectUnauthorized=false)');
 }
 
 const sharedDefine = {

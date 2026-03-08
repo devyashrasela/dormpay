@@ -1,3 +1,6 @@
+// Explicit require so Vercel's bundler includes mysql2 (Sequelize loads it dynamically)
+require('mysql2');
+
 const app = require('../src/server');
 const db = require('../src/models');
 
@@ -12,6 +15,12 @@ module.exports = async (req, res) => {
             dbInitialized = true;
         } catch (error) {
             console.error('DB init error:', error.message);
+            console.error('DB init stack:', error.stack);
+            return res.status(500).json({
+                error: 'Database initialization failed',
+                message: error.message,
+                hint: 'Check that DB environment variables are set in Vercel dashboard'
+            });
         }
     }
     return app(req, res);
