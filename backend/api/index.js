@@ -1,5 +1,5 @@
-const app = require('./src/server');
-const db = require('./src/models');
+const app = require('../src/server');
+const db = require('../src/models');
 
 // Initialize database connection for serverless
 let dbInitialized = false;
