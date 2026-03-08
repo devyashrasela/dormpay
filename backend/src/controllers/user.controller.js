@@ -1,4 +1,4 @@
-const { User } = require('../models');
+const { User, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 // POST /api/users/sync — Create or update user profile after Auth0 login
@@ -152,4 +152,87 @@ const completeSetup = async (req, res) => {
     }
 };
 
-module.exports = { syncUser, getMe, updateMe, lookupUser, searchUsers, completeSetup };
+// PUT /api/users/location — Update current user's coordinates
+const updateLocation = async (req, res) => {
+    try {
+        const user = await User.findOne({ where: { auth0_sub: req.userSub } });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const { latitude, longitude } = req.body;
+        if (latitude == null || longitude == null) {
+            return res.status(400).json({ error: 'latitude and longitude are required' });
+        }
+
+        await user.update({
+            latitude: parseFloat(latitude),
+            longitude: parseFloat(longitude),
+            last_location_at: new Date(),
+            is_active: true,
+            last_active: new Date(),
+        });
+
+        res.json({ message: 'Location updated' });
+    } catch (error) {
+        console.error('updateLocation error:', error);
+        res.status(500).json({ error: 'Failed to update location' });
+    }
+};
+
+// GET /api/users/nearby?lat=X&lng=Y&radius=100 — Find nearby active users
+const getNearbyUsers = async (req, res) => {
+    try {
+        const user = await User.findOne({ where: { auth0_sub: req.userSub } });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const { lat, lng, radius = 100 } = req.query;
+        if (!lat || !lng) {
+            return res.status(400).json({ error: 'lat and lng query params are required' });
+        }
+
+        const userLat = parseFloat(lat);
+        const userLng = parseFloat(lng);
+        const radiusMeters = parseFloat(radius);
+
+        // Haversine formula in SQL — returns distance in meters
+        const results = await sequelize.query(`
+            SELECT 
+                id, username, display_name, avatar_url, wallet_address,
+                latitude, longitude,
+                (
+                    6371000 * acos(
+                        cos(radians(:lat)) * cos(radians(latitude)) *
+                        cos(radians(longitude) - radians(:lng)) +
+                        sin(radians(:lat)) * sin(radians(latitude))
+                    )
+                ) AS distance
+            FROM users
+            WHERE id != :userId
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+              AND last_location_at > DATE_SUB(NOW(), INTERVAL 60 SECOND)
+              AND wallet_address IS NOT NULL
+            HAVING distance <= :radius
+            ORDER BY distance ASC
+            LIMIT 20
+        `, {
+            replacements: { lat: userLat, lng: userLng, userId: user.id, radius: radiusMeters },
+            type: sequelize.QueryTypes.SELECT,
+        });
+
+        const nearby = (Array.isArray(results) ? results : []).map(u => ({
+            id: u.id,
+            username: u.username,
+            display_name: u.display_name,
+            avatar_url: u.avatar_url,
+            wallet_address: u.wallet_address,
+            distance: Math.round(u.distance),
+        }));
+
+        res.json({ users: nearby });
+    } catch (error) {
+        console.error('getNearbyUsers error:', error);
+        res.status(500).json({ error: 'Failed to find nearby users' });
+    }
+};
+
+module.exports = { syncUser, getMe, updateMe, lookupUser, searchUsers, completeSetup, updateLocation, getNearbyUsers };

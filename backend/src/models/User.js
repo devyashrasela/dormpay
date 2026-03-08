@@ -51,6 +51,21 @@ module.exports = (sequelize) => {
             type: DataTypes.DATE,
             allowNull: true,
         },
+        latitude: {
+            type: DataTypes.DOUBLE,
+            allowNull: true,
+            comment: 'Current latitude for DormDrop proximity',
+        },
+        longitude: {
+            type: DataTypes.DOUBLE,
+            allowNull: true,
+            comment: 'Current longitude for DormDrop proximity',
+        },
+        last_location_at: {
+            type: DataTypes.DATE,
+            allowNull: true,
+            comment: 'When location was last updated',
+        },
         setup_completed: {
             type: DataTypes.BOOLEAN,
             allowNull: false,

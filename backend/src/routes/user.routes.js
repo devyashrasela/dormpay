@@ -11,5 +11,7 @@ router.put('/me', userController.updateMe);
 router.get('/search', userController.searchUsers);
 router.get('/lookup/:username', userController.lookupUser);
 router.put('/setup/complete', userController.completeSetup);
+router.put('/location', userController.updateLocation);
+router.get('/nearby', userController.getNearbyUsers);
 
 module.exports = router;
