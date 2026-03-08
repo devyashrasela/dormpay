@@ -15,6 +15,7 @@ import Analytics from './pages/Analytics';
 import AIChat from './pages/AIChat';
 import Settings from './pages/Settings';
 import LandingPage from './pages/LandingPage';
+import DormDrop from './pages/DormDrop';
 import logo from './assets/logo.svg';
 
 // Toast context
@@ -109,6 +110,7 @@ export default function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/chat" element={<AIChat />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/dormdrop" element={<DormDrop />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import usePeraWallet from '../hooks/usePeraWallet';
 import useWalletStore from '../store/useWalletStore';
@@ -37,6 +37,15 @@ export default function Send() {
             }
         };
     }, []);
+
+    // Pre-fill from URL params (from DormDrop)
+    const [searchParams] = useSearchParams();
+    useEffect(() => {
+        const toUser = searchParams.get('to');
+        if (toUser) {
+            resolveRecipient(`@${toUser}`);
+        }
+    }, [searchParams]);
 
     // Search users as you type username (no @ needed)
     const resolveRecipient = useCallback((value) => {
